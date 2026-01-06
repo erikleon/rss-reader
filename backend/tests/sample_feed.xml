@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Tech Blog</title>
+    <link>https://example.com</link>
+    <description>News and articles from Example.</description>
+    <item>
+      <title>First Post</title>
+      <link>https://example.com/first</link>
+      <guid>https://example.com/first</guid>
+      <pubDate>Mon, 05 Jan 2026 14:30:00 GMT</pubDate>
+      <description><![CDATA[<p>Hello <b>world</b>, this is the <i>first</i> post.</p>]]></description>
+    </item>
+    <item>
+      <title>Second Post</title>
+      <link>https://example.com/second</link>
+      <guid>https://example.com/second</guid>
+      <pubDate>Tue, 06 Jan 2026 09:00:00 GMT</pubDate>
+      <description>A plain text summary for the second post.</description>
+    </item>
+    <item>
+      <title>Untitled Link Item</title>
+      <link>https://example.com/third</link>
+      <pubDate>Tue, 06 Jan 2026 18:45:00 GMT</pubDate>
+      <description>This item has no guid; the link should be used instead.</description>
+    </item>
+  </channel>
+</rss>
