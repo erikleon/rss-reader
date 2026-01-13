@@ -12,6 +12,7 @@ from rss_reader import config
 from rss_reader.models import User
 
 FIXTURE = Path(__file__).parent / "sample_feed.xml"
+HOME_FIXTURE = Path(__file__).parent / "sample_home.html"
 
 
 @pytest.fixture
@@ -36,9 +37,31 @@ def session(engine):
 
 
 def _handler(request: httpx.Request) -> httpx.Response:
-    """Serve the local fixture for the example feed; 404 for anything else."""
+    """Serve local fixtures without touching the network.
+
+    For host example.com: the bare homepage ("/") returns an HTML page that
+    advertises the feed (for autodiscovery tests); "/feed.xml" and other paths
+    return the RSS fixture. Everything else 404s.
+    """
     if request.url.host == "example.com":
-        return httpx.Response(200, content=FIXTURE.read_bytes())
+        if request.url.path in ("", "/"):
+            return httpx.Response(
+                200,
+                content=HOME_FIXTURE.read_bytes(),
+                headers={"content-type": "text/html"},
+            )
+        return httpx.Response(
+            200,
+            content=FIXTURE.read_bytes(),
+            headers={"content-type": "application/rss+xml"},
+        )
+    if request.url.host == "nofeed.example":
+        # A valid HTML page that advertises no feed.
+        return httpx.Response(
+            200,
+            content=b"<html><head><title>No feed here</title></head><body>hi</body></html>",
+            headers={"content-type": "text/html"},
+        )
     return httpx.Response(404, text="not found")
 
 

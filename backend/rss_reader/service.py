@@ -36,6 +36,12 @@ def list_feeds(session: Session, user_id: int = config.DEFAULT_USER_ID) -> list[
     return list(session.exec(stmt))
 
 
+def _feed_for_url(session: Session, url: str, user_id: int) -> Feed | None:
+    return session.exec(
+        select(Feed).where(Feed.user_id == user_id, Feed.url == url)
+    ).first()
+
+
 def _get_feed(session: Session, feed_id: int, user_id: int) -> Feed:
     feed = session.get(Feed, feed_id)
     if feed is None or feed.user_id != user_id:
@@ -50,22 +56,29 @@ def add_feed(
     *,
     client: httpx.Client | None = None,
 ) -> Feed:
-    """Subscribe to ``url``: fetch once for metadata + an initial item pull."""
+    """Subscribe to ``url``: fetch (with feed autodiscovery), then pull items.
+
+    If ``url`` points at a site homepage rather than a feed, the feed URL is
+    discovered from the page's ``<link rel="alternate">`` tags and stored instead.
+    """
     url = url.strip()
-    existing = session.exec(
-        select(Feed).where(Feed.user_id == user_id, Feed.url == url)
-    ).first()
-    if existing is not None:
+    if _feed_for_url(session, url, user_id) is not None:
         raise FeedError(f"Already subscribed to {url}")
 
     try:
-        parsed = fetcher.fetch_feed(url, client=client)
+        resolved_url, parsed = fetcher.fetch_feed_autodiscover(url, client=client)
     except httpx.HTTPError as exc:
         raise FeedError(f"Could not fetch {url}: {exc}") from exc
+    except fetcher.FeedDiscoveryError as exc:
+        raise FeedError(str(exc)) from exc
+
+    # Autodiscovery may have resolved to a different URL already subscribed to.
+    if resolved_url != url and _feed_for_url(session, resolved_url, user_id) is not None:
+        raise FeedError(f"Already subscribed to {resolved_url}")
 
     feed = Feed(
         user_id=user_id,
-        url=url,
+        url=resolved_url,
         title=parsed.title,
         site_url=parsed.site_url,
         last_fetched_at=datetime.now(timezone.utc).replace(tzinfo=None),

@@ -10,11 +10,15 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html import unescape
+from html.parser import HTMLParser
+from urllib.parse import urljoin
 
 import feedparser
 import httpx
 
 from . import config
+
+_FEED_TYPES = ("application/rss+xml", "application/atom+xml", "application/xml", "text/xml")
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
@@ -34,6 +38,44 @@ class ParsedFeed:
     title: str
     site_url: str | None
     entries: list[ParsedEntry] = field(default_factory=list)
+    # feedparser's format version (e.g. "rss20", "atom10"); empty when the
+    # content is not a recognized feed (used to trigger autodiscovery).
+    version: str = ""
+
+    @property
+    def is_feed(self) -> bool:
+        return bool(self.version) or bool(self.entries)
+
+
+class FeedDiscoveryError(Exception):
+    """Raised when a URL is not a feed and no feed link can be discovered."""
+
+
+class _FeedLinkParser(HTMLParser):
+    """Collect <link rel="alternate" type="...rss/atom..."> hrefs from HTML."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "link":
+            return
+        a = {k.lower(): (v or "") for k, v in attrs}
+        rel = a.get("rel", "").lower()
+        type_ = a.get("type", "").lower()
+        href = a.get("href")
+        if href and "alternate" in rel and type_ in _FEED_TYPES:
+            self.links.append(href)
+
+
+def discover_feed_links(content: bytes | str, base_url: str) -> list[str]:
+    """Return absolute feed URLs advertised in an HTML page's <head>."""
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", errors="replace")
+    parser = _FeedLinkParser()
+    parser.feed(content)
+    return [urljoin(base_url, href) for href in parser.links]
 
 
 def _clean_summary(raw: str | None) -> str | None:
@@ -84,11 +126,15 @@ def parse_feed(content: bytes | str) -> ParsedFeed:
                 published_at=_entry_published(entry),
             )
         )
-    return ParsedFeed(title=title.strip(), site_url=site_url, entries=entries)
+    return ParsedFeed(
+        title=title.strip(),
+        site_url=site_url,
+        entries=entries,
+        version=parsed.get("version", "") or "",
+    )
 
 
-def fetch_feed(url: str, *, client: httpx.Client | None = None) -> ParsedFeed:
-    """Fetch ``url`` and return the parsed feed. Raises on network/HTTP errors."""
+def _get(url: str, client: httpx.Client | None) -> httpx.Response:
     headers = {"User-Agent": config.USER_AGENT}
     if client is not None:
         response = client.get(url, headers=headers, follow_redirects=True)
@@ -100,4 +146,30 @@ def fetch_feed(url: str, *, client: httpx.Client | None = None) -> ParsedFeed:
             timeout=config.FETCH_TIMEOUT,
         )
     response.raise_for_status()
-    return parse_feed(response.content)
+    return response
+
+
+def fetch_feed(url: str, *, client: httpx.Client | None = None) -> ParsedFeed:
+    """Fetch ``url`` and return the parsed feed. Raises on network/HTTP errors."""
+    return parse_feed(_get(url, client).content)
+
+
+def fetch_feed_autodiscover(
+    url: str, *, client: httpx.Client | None = None
+) -> tuple[str, ParsedFeed]:
+    """Fetch ``url``; if it is an HTML page, discover and fetch its feed.
+
+    Returns the ``(resolved_url, ParsedFeed)`` actually used so the caller can
+    store the real feed URL. Raises ``FeedDiscoveryError`` if nothing is found.
+    """
+    response = _get(url, client)
+    parsed = parse_feed(response.content)
+    if parsed.is_feed:
+        return str(response.url), parsed
+
+    links = discover_feed_links(response.content, str(response.url))
+    for link in links:
+        candidate = parse_feed(_get(link, client).content)
+        if candidate.is_feed:
+            return link, candidate
+    raise FeedDiscoveryError(f"No RSS/Atom feed found at {url}")

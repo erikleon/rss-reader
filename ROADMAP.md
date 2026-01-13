@@ -3,6 +3,11 @@
 Potential improvements, roughly prioritized by impact-to-effort. Nothing here is
 committed scope — it's a backlog of ideas.
 
+## Shipped
+
+- ~~**Feed autodiscovery.**~~ Pasting a site homepage now resolves the real feed URL
+  from its `<link rel="alternate">` tags.
+
 ## High-value, low-effort
 
 - **Background auto-refresh.** Periodically call `refresh_all` (asyncio task or
@@ -17,8 +22,6 @@ committed scope — it's a backlog of ideas.
 
 ## Robustness / correctness
 
-- **Feed autodiscovery.** If a user pastes a site homepage, parse
-  `<link rel="alternate" type="application/rss+xml">` and resolve the real feed URL.
 - **Concurrent refresh.** Move `fetch_feed` to async `httpx.AsyncClient` and gather so
   many feeds refresh in parallel.
 - **Conditional GET (ETag / Last-Modified).** Store per feed and send
