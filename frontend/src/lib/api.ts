@@ -46,4 +46,14 @@ export const api = {
 
   markAllRead: () =>
     request<{ updated: number }>("/api/items/read-all", { method: "POST" }),
+
+  importOpml: (xml: string) =>
+    request<{ added: number; skipped: number; failed: { url: string; error: string }[] }>(
+      "/api/import/opml",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/xml" },
+        body: xml,
+      },
+    ),
 };

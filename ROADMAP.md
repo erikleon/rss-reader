@@ -7,14 +7,15 @@ committed scope — it's a backlog of ideas.
 
 - ~~**Feed autodiscovery.**~~ Pasting a site homepage now resolves the real feed URL
   from its `<link rel="alternate">` tags.
+- ~~**OPML import.**~~ Import subscriptions from an OPML file via the web UI
+  ("Import OPML"), the `rss-reader import` CLI command, or `POST /api/import/opml`.
 
 ## High-value, low-effort
 
 - **Background auto-refresh.** Periodically call `refresh_all` (asyncio task or
   APScheduler) on a configurable interval instead of only on manual click. Per-feed
   error isolation already exists, so this is mostly wiring.
-- **OPML import / export.** Import loops `add_feed` over parsed OPML; export reads
-  `list_feeds`. The standard way users migrate in and out of readers.
+- **OPML export.** Generate an OPML document from `list_feeds` (import already shipped).
 - **Favicon / source icons.** Resolve each feed's site favicon at `add_feed` time and
   show it beside the source in `ItemRow`.
 - **Feed-level filtering in the UI.** Click a feed in the sidebar to filter items to it

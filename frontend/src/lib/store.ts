@@ -100,3 +100,22 @@ export async function markAllRead() {
     report(e);
   }
 }
+
+export const importStatus = writable<string | null>(null);
+
+export async function importOpml(xml: string) {
+  importStatus.set("Importing…");
+  error.set(null);
+  try {
+    const r = await api.importOpml(xml);
+    importStatus.set(
+      `Imported ${r.added} feed${r.added === 1 ? "" : "s"}` +
+        (r.skipped ? `, ${r.skipped} already subscribed` : "") +
+        (r.failed.length ? `, ${r.failed.length} failed` : ""),
+    );
+    await Promise.all([loadFeeds(), loadItems()]);
+  } catch (e) {
+    importStatus.set(null);
+    report(e);
+  }
+}

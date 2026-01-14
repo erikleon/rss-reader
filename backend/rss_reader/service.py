@@ -12,13 +12,17 @@ from datetime import date, datetime, timedelta, timezone
 import httpx
 from sqlmodel import Session, select
 
-from . import config, fetcher
+from . import config, fetcher, opml
 from .fetcher import ParsedFeed
 from .models import Feed, Item
 
 
 class FeedError(Exception):
-    """Raised for user-facing feed problems (duplicate, unreachable, missing)."""
+    """Raised for user-facing feed problems (unreachable, missing, etc.)."""
+
+
+class DuplicateFeedError(FeedError):
+    """Raised when subscribing to a feed that already exists."""
 
 
 def _to_naive_utc(dt: datetime) -> datetime:
@@ -63,7 +67,7 @@ def add_feed(
     """
     url = url.strip()
     if _feed_for_url(session, url, user_id) is not None:
-        raise FeedError(f"Already subscribed to {url}")
+        raise DuplicateFeedError(f"Already subscribed to {url}")
 
     try:
         resolved_url, parsed = fetcher.fetch_feed_autodiscover(url, client=client)
@@ -74,7 +78,7 @@ def add_feed(
 
     # Autodiscovery may have resolved to a different URL already subscribed to.
     if resolved_url != url and _feed_for_url(session, resolved_url, user_id) is not None:
-        raise FeedError(f"Already subscribed to {resolved_url}")
+        raise DuplicateFeedError(f"Already subscribed to {resolved_url}")
 
     feed = Feed(
         user_id=user_id,
@@ -90,6 +94,33 @@ def add_feed(
     session.commit()
     session.refresh(feed)
     return feed
+
+
+@dataclass
+class ImportResult:
+    added: list[str]                  # titles of newly subscribed feeds
+    skipped: list[str]                # URLs already subscribed to
+    failed: list[tuple[str, str]]     # (url, error message)
+
+
+def import_opml(
+    session: Session,
+    content: bytes | str,
+    user_id: int = config.DEFAULT_USER_ID,
+    *,
+    client: httpx.Client | None = None,
+) -> ImportResult:
+    """Subscribe to every feed in an OPML document, isolating per-feed failures."""
+    result = ImportResult(added=[], skipped=[], failed=[])
+    for entry in opml.parse_opml(content):
+        try:
+            feed = add_feed(session, entry.xml_url, user_id, client=client)
+            result.added.append(feed.title)
+        except DuplicateFeedError:
+            result.skipped.append(entry.xml_url)
+        except FeedError as exc:
+            result.failed.append((entry.xml_url, str(exc)))
+    return result
 
 
 def remove_feed(

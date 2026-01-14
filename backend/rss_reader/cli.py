@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from . import service
@@ -59,6 +61,33 @@ def feed_list() -> None:
         if feed.last_error:
             line += f"  ⚠ {feed.last_error}"
         typer.echo(line)
+
+
+# --------------------------------------------------------------------------- #
+# import (OPML)
+# --------------------------------------------------------------------------- #
+@app.command("import")
+def import_opml(path: Path) -> None:
+    """Import feed subscriptions from an OPML file."""
+    _ensure_db()
+    try:
+        content = path.read_bytes()
+    except OSError as exc:
+        typer.secho(f"Could not read {path}: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    with session_scope() as session:
+        try:
+            result = service.import_opml(session, content)
+        except service.opml.OpmlError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1)
+    typer.secho(
+        f"Added {len(result.added)}, skipped {len(result.skipped)} (duplicate), "
+        f"failed {len(result.failed)}.",
+        fg=typer.colors.GREEN,
+    )
+    for url, err in result.failed:
+        typer.secho(f"  ✗ {url}: {err}", fg=typer.colors.RED)
 
 
 # --------------------------------------------------------------------------- #

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AddFeed from "./components/AddFeed.svelte";
+  import ImportOpml from "./components/ImportOpml.svelte";
   import FeedSidebar from "./components/FeedSidebar.svelte";
   import RefreshButton from "./components/RefreshButton.svelte";
   import DaySection from "./components/DaySection.svelte";
@@ -36,6 +37,7 @@
     <h1 class="brand">RSS Reader</h1>
     <AddFeed />
     <FeedSidebar />
+    <ImportOpml />
   </aside>
 
   <main class="content">

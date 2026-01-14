@@ -5,17 +5,17 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from . import config, service
+from . import config, opml, service
 from .db import get_engine, init_db
 from .models import Feed, Item
 
-# Path to the built Svelte/Arrow frontend (frontend/dist), served when present.
+# Path to the built Svelte frontend (frontend/dist), served when present.
 _FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 app = FastAPI(title="rss-reader")
@@ -117,6 +117,26 @@ def post_item_read(
 @app.post("/api/items/read-all")
 def post_read_all(session: Session = Depends(get_session)) -> dict[str, int]:
     return {"updated": service.mark_all_read(session)}
+
+
+# --------------------------------------------------------------------------- #
+# OPML import
+# --------------------------------------------------------------------------- #
+@app.post("/api/import/opml")
+async def post_import_opml(
+    request: Request, session: Session = Depends(get_session)
+) -> dict[str, object]:
+    """Import subscriptions from a raw OPML body (text/xml)."""
+    body = await request.body()
+    try:
+        result = service.import_opml(session, body)
+    except opml.OpmlError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "added": len(result.added),
+        "skipped": len(result.skipped),
+        "failed": [{"url": u, "error": e} for u, e in result.failed],
+    }
 
 
 # --------------------------------------------------------------------------- #
