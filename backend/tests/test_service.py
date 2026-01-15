@@ -41,6 +41,16 @@ def test_refresh_dedupes_existing_items(session, client, feed_url):
     assert len(service.list_items(session, days=None)) == 3
 
 
+def test_refresh_all_handles_multiple_feeds(session, client):
+    # Distinct URLs are distinct feeds even though the fixture body is shared.
+    service.add_feed(session, "https://example.com/a.xml", client=client)
+    service.add_feed(session, "https://example.com/b.xml", client=client)
+    service.add_feed(session, "https://example.com/c.xml", client=client)
+    results = service.refresh_all(session, client=client)
+    assert len(results) == 3
+    assert all(r.error is None for r in results)
+
+
 def test_refresh_isolates_feed_errors(session, client, feed_url):
     service.add_feed(session, feed_url, client=client)
 

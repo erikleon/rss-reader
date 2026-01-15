@@ -6,6 +6,7 @@ current user). Queries are scoped by ``user_id`` so adding auth later is additiv
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
@@ -168,19 +169,28 @@ def _upsert_items(session: Session, feed: Feed, parsed: ParsedFeed) -> int:
     return new_count
 
 
-def refresh_feed(
-    session: Session,
-    feed: Feed,
-    *,
-    client: httpx.Client | None = None,
-) -> RefreshResult:
-    """Refresh a single feed, capturing any error on the feed row."""
+def _fetch_for_refresh(
+    url: str, client: httpx.Client | None
+) -> tuple[ParsedFeed | None, str | None]:
+    """Network-only part of a refresh; safe to run in a worker thread.
+
+    Touches no ORM state — the feed URL is passed in by value — so many feeds can
+    be fetched concurrently while DB writes stay on the owning thread.
+    """
     try:
-        parsed = fetcher.fetch_feed(feed.url, client=client)
+        return fetcher.fetch_feed(url, client=client), None
     except Exception as exc:  # noqa: BLE001 - one bad feed must not abort others
-        feed.last_error = str(exc)
+        return None, str(exc)
+
+
+def _apply_fetch(
+    session: Session, feed: Feed, parsed: ParsedFeed | None, error: str | None
+) -> RefreshResult:
+    """DB-side part of a refresh; runs serially on the session's thread."""
+    if error is not None:
+        feed.last_error = error
         session.add(feed)
-        return RefreshResult(feed.id, feed.title, 0, error=str(exc))
+        return RefreshResult(feed.id, feed.title, 0, error=error)
 
     new_count = _upsert_items(session, feed, parsed)
     feed.last_fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -189,14 +199,38 @@ def refresh_feed(
     return RefreshResult(feed.id, feed.title, new_count)
 
 
+def refresh_feed(
+    session: Session,
+    feed: Feed,
+    *,
+    client: httpx.Client | None = None,
+) -> RefreshResult:
+    """Refresh a single feed, capturing any error on the feed row."""
+    parsed, error = _fetch_for_refresh(feed.url, client)
+    return _apply_fetch(session, feed, parsed, error)
+
+
 def refresh_all(
     session: Session,
     user_id: int = config.DEFAULT_USER_ID,
     *,
     client: httpx.Client | None = None,
 ) -> list[RefreshResult]:
-    """Refresh every subscribed feed; failures are isolated per feed."""
-    results = [refresh_feed(session, feed, client=client) for feed in list_feeds(session, user_id)]
+    """Refresh every subscribed feed; fetches run in parallel, writes serially."""
+    feeds = list_feeds(session, user_id)
+    if not feeds:
+        return []
+
+    workers = min(config.REFRESH_CONCURRENCY, len(feeds))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        # feed.url is read here on the main thread, not inside the worker.
+        futures = [pool.submit(_fetch_for_refresh, feed.url, client) for feed in feeds]
+        fetched = [f.result() for f in futures]
+
+    results = [
+        _apply_fetch(session, feed, parsed, error)
+        for feed, (parsed, error) in zip(feeds, fetched)
+    ]
     session.commit()
     return results
 

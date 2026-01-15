@@ -24,6 +24,9 @@ SNIPPET_LENGTH = 280
 AUTO_REFRESH = os.environ.get("RSS_READER_AUTO_REFRESH", "1") not in ("0", "false", "False", "")
 REFRESH_INTERVAL = int(os.environ.get("RSS_READER_REFRESH_INTERVAL", "900"))
 
+# Max feeds fetched in parallel during a refresh.
+REFRESH_CONCURRENCY = int(os.environ.get("RSS_READER_CONCURRENCY", "8"))
+
 
 def db_path() -> Path:
     """Location of the SQLite file. Override with RSS_READER_DB."""

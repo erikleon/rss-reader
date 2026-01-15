@@ -12,6 +12,8 @@ committed scope — it's a backlog of ideas.
 - ~~**Background auto-refresh.**~~ The server refreshes all feeds on a configurable
   interval (`RSS_READER_REFRESH_INTERVAL`, default 15m; disable with
   `RSS_READER_AUTO_REFRESH=0`); the web UI polls so new items surface automatically.
+- ~~**Parallel refresh.**~~ Feeds are fetched concurrently (thread pool, capped by
+  `RSS_READER_CONCURRENCY`) with DB writes kept serial.
 
 ## High-value, low-effort
 
@@ -23,8 +25,6 @@ committed scope — it's a backlog of ideas.
 
 ## Robustness / correctness
 
-- **Concurrent refresh.** Move `fetch_feed` to async `httpx.AsyncClient` and gather so
-  many feeds refresh in parallel.
 - **Conditional GET (ETag / Last-Modified).** Store per feed and send
   `If-None-Match` / `If-Modified-Since` to skip unchanged feeds (304).
 - **Retention / cleanup.** A `prune` command/job to drop read items older than N days,
