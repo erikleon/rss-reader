@@ -9,12 +9,12 @@ committed scope — it's a backlog of ideas.
   from its `<link rel="alternate">` tags.
 - ~~**OPML import.**~~ Import subscriptions from an OPML file via the web UI
   ("Import OPML"), the `rss-reader import` CLI command, or `POST /api/import/opml`.
+- ~~**Background auto-refresh.**~~ The server refreshes all feeds on a configurable
+  interval (`RSS_READER_REFRESH_INTERVAL`, default 15m; disable with
+  `RSS_READER_AUTO_REFRESH=0`); the web UI polls so new items surface automatically.
 
 ## High-value, low-effort
 
-- **Background auto-refresh.** Periodically call `refresh_all` (asyncio task or
-  APScheduler) on a configurable interval instead of only on manual click. Per-feed
-  error isolation already exists, so this is mostly wiring.
 - **OPML export.** Generate an OPML document from `list_feeds` (import already shipped).
 - **Favicon / source icons.** Resolve each feed's site favicon at `add_feed` time and
   show it beside the source in `ItemRow`.

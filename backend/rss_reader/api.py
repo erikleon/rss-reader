@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from . import config, opml, service
+from . import config, opml, scheduler, service
 from .db import get_engine, init_db
 from .models import Feed, Item
 
@@ -29,8 +29,14 @@ app.add_middleware(
 
 
 @app.on_event("startup")
-def _startup() -> None:
+async def _startup() -> None:
     init_db()
+    scheduler.start(app)
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    await scheduler.stop(app)
 
 
 def get_session():

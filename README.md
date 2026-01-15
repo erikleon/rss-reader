@@ -6,8 +6,10 @@ them in a clean view **grouped by day** with read/unread tracking. Usable as a *
 
 ## Features
 
-- Add / remove feed subscriptions (RSS and Atom)
-- Manual refresh that dedupes items and isolates per-feed errors
+- Add / remove feed subscriptions (RSS and Atom), with **autodiscovery** — paste a site
+  homepage and the real feed URL is found from its `<link rel="alternate">` tags
+- Manual refresh plus **background auto-refresh** on a configurable interval
+- **OPML import** (web UI, CLI, or API) to bring subscriptions over from another reader
 - Items grouped by day, newest first; title + source + time + snippet, link opens the original
 - Read/unread tracking, with an "unread only" filter and "mark all read"
 - Single-user today, but the data model and service layer are scoped by `user_id` so auth /
@@ -64,14 +66,24 @@ cd frontend && npm run dev  # frontend on :5173, proxies /api to :8000
 ### CLI
 
 ```bash
-rss-reader feed add https://hnrss.org/frontpage
+rss-reader feed add https://hnrss.org/frontpage   # or paste a site homepage (autodiscovery)
 rss-reader refresh
 rss-reader items --days 30          # grouped by day; --unread for unread only
 rss-reader read <item_id>           # or: unread <item_id> / read-all
+rss-reader import subscriptions.opml
 rss-reader feed list
 ```
 
 The SQLite database lives at `~/.rss-reader/rss_reader.db` (override with `RSS_READER_DB`).
+
+## Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RSS_READER_DB` | `~/.rss-reader/rss_reader.db` | SQLite database location |
+| `RSS_READER_AUTO_REFRESH` | `1` | Background auto-refresh (`0` to disable) |
+| `RSS_READER_REFRESH_INTERVAL` | `900` | Auto-refresh interval, seconds |
+| `RSS_READER_TIMEOUT` | `15` | Per-feed fetch timeout, seconds |
 
 ## Testing
 

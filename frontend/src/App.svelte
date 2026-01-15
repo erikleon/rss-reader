@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import AddFeed from "./components/AddFeed.svelte";
   import ImportOpml from "./components/ImportOpml.svelte";
   import FeedSidebar from "./components/FeedSidebar.svelte";
@@ -19,6 +19,15 @@
   onMount(async () => {
     await Promise.all([loadFeeds(), loadItems()]);
   });
+
+  // The backend auto-refreshes feeds on its own schedule; poll periodically so
+  // newly fetched items surface without a manual reload.
+  const POLL_MS = 5 * 60 * 1000;
+  const poll = setInterval(() => {
+    loadFeeds();
+    loadItems();
+  }, POLL_MS);
+  onDestroy(() => clearInterval(poll));
 
   // Reload items whenever the unread filter changes.
   function onToggleUnread() {

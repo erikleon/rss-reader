@@ -14,7 +14,7 @@ from sqlmodel import Session, select
 
 from . import config, fetcher, opml
 from .fetcher import ParsedFeed
-from .models import Feed, Item
+from .models import Feed, Item, User
 
 
 class FeedError(Exception):
@@ -199,6 +199,14 @@ def refresh_all(
     results = [refresh_feed(session, feed, client=client) for feed in list_feeds(session, user_id)]
     session.commit()
     return results
+
+
+def refresh_all_users(
+    session: Session, *, client: httpx.Client | None = None
+) -> dict[int, list[RefreshResult]]:
+    """Refresh feeds for every user. Used by the background scheduler."""
+    user_ids = list(session.exec(select(User.id)))
+    return {uid: refresh_all(session, uid, client=client) for uid in user_ids}
 
 
 # --------------------------------------------------------------------------- #
