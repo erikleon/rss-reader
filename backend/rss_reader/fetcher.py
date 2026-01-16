@@ -134,8 +134,14 @@ def parse_feed(content: bytes | str) -> ParsedFeed:
     )
 
 
-def _get(url: str, client: httpx.Client | None) -> httpx.Response:
+def _get(
+    url: str,
+    client: httpx.Client | None,
+    extra_headers: dict[str, str] | None = None,
+) -> httpx.Response:
     headers = {"User-Agent": config.USER_AGENT}
+    if extra_headers:
+        headers.update(extra_headers)
     if client is not None:
         response = client.get(url, headers=headers, follow_redirects=True)
     else:
@@ -145,13 +151,52 @@ def _get(url: str, client: httpx.Client | None) -> httpx.Response:
             follow_redirects=True,
             timeout=config.FETCH_TIMEOUT,
         )
-    response.raise_for_status()
+    # 304 (Not Modified) is a successful conditional response, not an error.
+    if response.status_code != 304:
+        response.raise_for_status()
     return response
 
 
 def fetch_feed(url: str, *, client: httpx.Client | None = None) -> ParsedFeed:
     """Fetch ``url`` and return the parsed feed. Raises on network/HTTP errors."""
     return parse_feed(_get(url, client).content)
+
+
+@dataclass
+class FetchResult:
+    not_modified: bool
+    parsed: ParsedFeed | None
+    etag: str | None
+    last_modified: str | None
+
+
+def fetch_conditional(
+    url: str,
+    *,
+    etag: str | None = None,
+    last_modified: str | None = None,
+    client: httpx.Client | None = None,
+) -> FetchResult:
+    """Fetch ``url`` sending validators; report 304 without re-parsing.
+
+    Returns the new ETag/Last-Modified from the response so the caller can store
+    them for next time.
+    """
+    headers: dict[str, str] = {}
+    if etag:
+        headers["If-None-Match"] = etag
+    if last_modified:
+        headers["If-Modified-Since"] = last_modified
+
+    response = _get(url, client, headers)
+    if response.status_code == 304:
+        return FetchResult(True, None, etag, last_modified)
+    return FetchResult(
+        not_modified=False,
+        parsed=parse_feed(response.content),
+        etag=response.headers.get("etag"),
+        last_modified=response.headers.get("last-modified"),
+    )
 
 
 def fetch_feed_autodiscover(

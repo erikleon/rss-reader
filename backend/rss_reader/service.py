@@ -170,21 +170,28 @@ def _upsert_items(session: Session, feed: Feed, parsed: ParsedFeed) -> int:
 
 
 def _fetch_for_refresh(
-    url: str, client: httpx.Client | None
-) -> tuple[ParsedFeed | None, str | None]:
+    url: str, etag: str | None, last_modified: str | None, client: httpx.Client | None
+) -> tuple[fetcher.FetchResult | None, str | None]:
     """Network-only part of a refresh; safe to run in a worker thread.
 
-    Touches no ORM state — the feed URL is passed in by value — so many feeds can
-    be fetched concurrently while DB writes stay on the owning thread.
+    Touches no ORM state — the feed URL and validators are passed in by value —
+    so many feeds can be fetched concurrently while DB writes stay on the owning
+    thread. Sends conditional-GET validators so unchanged feeds return 304.
     """
     try:
-        return fetcher.fetch_feed(url, client=client), None
+        result = fetcher.fetch_conditional(
+            url, etag=etag, last_modified=last_modified, client=client
+        )
+        return result, None
     except Exception as exc:  # noqa: BLE001 - one bad feed must not abort others
         return None, str(exc)
 
 
 def _apply_fetch(
-    session: Session, feed: Feed, parsed: ParsedFeed | None, error: str | None
+    session: Session,
+    feed: Feed,
+    result: fetcher.FetchResult | None,
+    error: str | None,
 ) -> RefreshResult:
     """DB-side part of a refresh; runs serially on the session's thread."""
     if error is not None:
@@ -192,9 +199,16 @@ def _apply_fetch(
         session.add(feed)
         return RefreshResult(feed.id, feed.title, 0, error=error)
 
-    new_count = _upsert_items(session, feed, parsed)
     feed.last_fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)
     feed.last_error = None
+    if result.not_modified:
+        # Unchanged since last fetch; nothing to upsert.
+        session.add(feed)
+        return RefreshResult(feed.id, feed.title, 0)
+
+    new_count = _upsert_items(session, feed, result.parsed)
+    feed.etag = result.etag
+    feed.last_modified = result.last_modified
     session.add(feed)
     return RefreshResult(feed.id, feed.title, new_count)
 
@@ -206,8 +220,8 @@ def refresh_feed(
     client: httpx.Client | None = None,
 ) -> RefreshResult:
     """Refresh a single feed, capturing any error on the feed row."""
-    parsed, error = _fetch_for_refresh(feed.url, client)
-    return _apply_fetch(session, feed, parsed, error)
+    result, error = _fetch_for_refresh(feed.url, feed.etag, feed.last_modified, client)
+    return _apply_fetch(session, feed, result, error)
 
 
 def refresh_all(
@@ -223,13 +237,18 @@ def refresh_all(
 
     workers = min(config.REFRESH_CONCURRENCY, len(feeds))
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        # feed.url is read here on the main thread, not inside the worker.
-        futures = [pool.submit(_fetch_for_refresh, feed.url, client) for feed in feeds]
+        # Feed attributes are read here on the main thread, not in the worker.
+        futures = [
+            pool.submit(
+                _fetch_for_refresh, feed.url, feed.etag, feed.last_modified, client
+            )
+            for feed in feeds
+        ]
         fetched = [f.result() for f in futures]
 
     results = [
-        _apply_fetch(session, feed, parsed, error)
-        for feed, (parsed, error) in zip(feeds, fetched)
+        _apply_fetch(session, feed, result, error)
+        for feed, (result, error) in zip(feeds, fetched)
     ]
     session.commit()
     return results

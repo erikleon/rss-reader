@@ -40,6 +40,9 @@ class Feed(SQLModel, table=True):
     added_at: datetime = Field(default_factory=_utcnow)
     last_fetched_at: datetime | None = None
     last_error: str | None = None
+    # HTTP validators for conditional GET, so unchanged feeds return 304.
+    etag: str | None = None
+    last_modified: str | None = None
 
 
 class Item(SQLModel, table=True):

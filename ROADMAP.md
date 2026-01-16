@@ -16,6 +16,8 @@ committed scope — it's a backlog of ideas.
   `RSS_READER_CONCURRENCY`) with DB writes kept serial.
 - ~~**Migrations.**~~ Schema is managed by Alembic; `init_db` applies migrations on
   startup (and stamps pre-Alembic databases).
+- ~~**Conditional GET.**~~ Per-feed ETag/Last-Modified are stored and sent as
+  `If-None-Match`/`If-Modified-Since`; a 304 skips re-parsing.
 
 ## High-value, low-effort
 
@@ -27,8 +29,6 @@ committed scope — it's a backlog of ideas.
 
 ## Robustness / correctness
 
-- **Conditional GET (ETag / Last-Modified).** Store per feed and send
-  `If-None-Match` / `If-Modified-Since` to skip unchanged feeds (304).
 - **Retention / cleanup.** A `prune` command/job to drop read items older than N days,
   since "keep everything" grows unbounded.
 

@@ -13,6 +13,7 @@ from rss_reader.models import User
 
 FIXTURE = Path(__file__).parent / "sample_feed.xml"
 HOME_FIXTURE = Path(__file__).parent / "sample_home.html"
+FEED_ETAG = '"feed-v1"'
 
 
 @pytest.fixture
@@ -50,10 +51,17 @@ def _handler(request: httpx.Request) -> httpx.Response:
                 content=HOME_FIXTURE.read_bytes(),
                 headers={"content-type": "text/html"},
             )
+        # Conditional GET: 304 when the client already has the current version.
+        if request.headers.get("if-none-match") == FEED_ETAG:
+            return httpx.Response(304, headers={"etag": FEED_ETAG})
         return httpx.Response(
             200,
             content=FIXTURE.read_bytes(),
-            headers={"content-type": "application/rss+xml"},
+            headers={
+                "content-type": "application/rss+xml",
+                "etag": FEED_ETAG,
+                "last-modified": "Wed, 07 Jan 2026 00:00:00 GMT",
+            },
         )
     if request.url.host == "nofeed.example":
         # A valid HTML page that advertises no feed.
