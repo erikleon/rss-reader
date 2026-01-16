@@ -14,6 +14,8 @@ committed scope — it's a backlog of ideas.
   `RSS_READER_AUTO_REFRESH=0`); the web UI polls so new items surface automatically.
 - ~~**Parallel refresh.**~~ Feeds are fetched concurrently (thread pool, capped by
   `RSS_READER_CONCURRENCY`) with DB writes kept serial.
+- ~~**Migrations.**~~ Schema is managed by Alembic; `init_db` applies migrations on
+  startup (and stamps pre-Alembic databases).
 
 ## High-value, low-effort
 
@@ -29,8 +31,6 @@ committed scope — it's a backlog of ideas.
   `If-None-Match` / `If-Modified-Since` to skip unchanged feeds (304).
 - **Retention / cleanup.** A `prune` command/job to drop read items older than N days,
   since "keep everything" grows unbounded.
-- **Migrations.** Adopt Alembic while the schema is small;
-  `SQLModel.metadata.create_all` won't alter existing tables.
 
 ## Multi-user path
 

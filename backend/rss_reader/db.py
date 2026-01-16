@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
-from sqlmodel import Session, SQLModel, create_engine
+from sqlalchemy import inspect
+from sqlmodel import Session, create_engine
 
 from . import config
 from .models import User
+
+_MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "migrations"
 
 _engine = None
 
@@ -24,10 +28,36 @@ def get_engine():
     return _engine
 
 
+def _alembic_config(engine):
+    from alembic.config import Config
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(_MIGRATIONS_DIR))
+    cfg.set_main_option("sqlalchemy.url", str(engine.url))
+    return cfg
+
+
+def _migrate(engine) -> None:
+    """Bring the schema to head via Alembic.
+
+    A database created before Alembic was adopted already has the tables but no
+    ``alembic_version``; stamp it at head rather than re-creating, then future
+    migrations apply normally.
+    """
+    from alembic import command
+
+    cfg = _alembic_config(engine)
+    tables = inspect(engine).get_table_names()
+    if "feeds" in tables and "alembic_version" not in tables:
+        command.stamp(cfg, "head")
+    else:
+        command.upgrade(cfg, "head")
+
+
 def init_db(engine=None) -> None:
-    """Create tables (if needed) and ensure the default user exists."""
+    """Apply migrations and ensure the default user exists."""
     engine = engine or get_engine()
-    SQLModel.metadata.create_all(engine)
+    _migrate(engine)
     with Session(engine) as session:
         existing = session.get(User, config.DEFAULT_USER_ID)
         if existing is None:

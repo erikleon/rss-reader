@@ -75,6 +75,8 @@ rss-reader feed list
 ```
 
 The SQLite database lives at `~/.rss-reader/rss_reader.db` (override with `RSS_READER_DB`).
+The schema is managed by Alembic and applied automatically on startup; after changing a
+model, generate a migration with `alembic revision --autogenerate -m "describe change"`.
 
 ## Configuration
 
