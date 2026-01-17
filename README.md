@@ -71,6 +71,7 @@ rss-reader refresh
 rss-reader items --days 30          # grouped by day; --unread for unread only
 rss-reader read <item_id>           # or: unread <item_id> / read-all
 rss-reader import subscriptions.opml
+rss-reader prune --days 90          # delete read items older than 90 days (--all incl. unread)
 rss-reader feed list
 ```
 
@@ -85,6 +86,8 @@ model, generate a migration with `alembic revision --autogenerate -m "describe c
 | `RSS_READER_DB` | `~/.rss-reader/rss_reader.db` | SQLite database location |
 | `RSS_READER_AUTO_REFRESH` | `1` | Background auto-refresh (`0` to disable) |
 | `RSS_READER_REFRESH_INTERVAL` | `900` | Auto-refresh interval, seconds |
+| `RSS_READER_CONCURRENCY` | `8` | Max feeds fetched in parallel per refresh |
+| `RSS_READER_RETENTION_DAYS` | `0` | Auto-prune read items older than N days (`0` = keep all) |
 | `RSS_READER_TIMEOUT` | `15` | Per-feed fetch timeout, seconds |
 
 ## Testing

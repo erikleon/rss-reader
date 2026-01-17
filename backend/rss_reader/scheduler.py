@@ -19,9 +19,16 @@ log = logging.getLogger("rss_reader.scheduler")
 
 
 def run_refresh_cycle(engine=None, *, client: httpx.Client | None = None) -> int:
-    """Run one refresh of every feed for every user. Returns total new items."""
+    """Run one refresh of every feed for every user. Returns total new items.
+
+    When retention is configured, old items are pruned after refreshing.
+    """
     with session_scope(engine) as session:
         results = service.refresh_all_users(session, client=client)
+        if config.RETENTION_DAYS > 0:
+            pruned = service.prune_all_users(session, days=config.RETENTION_DAYS)
+            if pruned:
+                log.info("retention: pruned %d old item(s)", pruned)
     return sum(r.new_count for feed_results in results.values() for r in feed_results)
 
 

@@ -27,6 +27,10 @@ REFRESH_INTERVAL = int(os.environ.get("RSS_READER_REFRESH_INTERVAL", "900"))
 # Max feeds fetched in parallel during a refresh.
 REFRESH_CONCURRENCY = int(os.environ.get("RSS_READER_CONCURRENCY", "8"))
 
+# Auto-prune read items older than this many days after each auto-refresh.
+# 0 disables retention (keep everything).
+RETENTION_DAYS = int(os.environ.get("RSS_READER_RETENTION_DAYS", "0"))
+
 
 def db_path() -> Path:
     """Location of the SQLite file. Override with RSS_READER_DB."""

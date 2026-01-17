@@ -320,6 +320,45 @@ def mark_all_read(session: Session, user_id: int = config.DEFAULT_USER_ID) -> in
 
 
 # --------------------------------------------------------------------------- #
+# Retention
+# --------------------------------------------------------------------------- #
+def prune_items(
+    session: Session,
+    user_id: int = config.DEFAULT_USER_ID,
+    *,
+    days: int,
+    include_unread: bool = False,
+) -> int:
+    """Delete items older than ``days``. Read-only by default. Returns the count."""
+    if days <= 0:
+        return 0
+    feed_ids = [f.id for f in list_feeds(session, user_id)]
+    if not feed_ids:
+        return 0
+
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+    stmt = select(Item).where(Item.feed_id.in_(feed_ids), Item.published_at < cutoff)
+    if not include_unread:
+        stmt = stmt.where(Item.read == True)  # noqa: E712 - SQL boolean column
+
+    items = list(session.exec(stmt))
+    for item in items:
+        session.delete(item)
+    session.commit()
+    return len(items)
+
+
+def prune_all_users(
+    session: Session, *, days: int, include_unread: bool = False
+) -> int:
+    """Prune old items for every user. Used by the background scheduler."""
+    total = 0
+    for uid in list(session.exec(select(User.id))):
+        total += prune_items(session, uid, days=days, include_unread=include_unread)
+    return total
+
+
+# --------------------------------------------------------------------------- #
 # Grouping (used by the CLI; the frontend groups client-side in local time)
 # --------------------------------------------------------------------------- #
 @dataclass

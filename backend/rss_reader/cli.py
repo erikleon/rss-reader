@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from . import service
+from . import config, service
 from .db import get_engine, init_db, session_scope
 
 app = typer.Typer(help="A simple personal RSS reader.", no_args_is_help=True)
@@ -172,6 +172,33 @@ def read_all() -> None:
     with session_scope() as session:
         count = service.mark_all_read(session)
     typer.secho(f"Marked {count} item(s) read.", fg=typer.colors.GREEN)
+
+
+# --------------------------------------------------------------------------- #
+# prune (retention)
+# --------------------------------------------------------------------------- #
+@app.command()
+def prune(
+    days: int = typer.Option(
+        None, help="Delete items older than this many days [default: RSS_READER_RETENTION_DAYS]."
+    ),
+    include_unread: bool = typer.Option(
+        False, "--all", help="Also delete unread items (default keeps unread)."
+    ),
+) -> None:
+    """Delete old items to keep the database small."""
+    _ensure_db()
+    cutoff_days = days if days is not None else config.RETENTION_DAYS
+    if cutoff_days <= 0:
+        typer.secho(
+            "Specify --days N (or set RSS_READER_RETENTION_DAYS).",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    with session_scope() as session:
+        count = service.prune_items(session, days=cutoff_days, include_unread=include_unread)
+    typer.secho(f"Pruned {count} item(s).", fg=typer.colors.GREEN)
 
 
 # --------------------------------------------------------------------------- #

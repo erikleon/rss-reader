@@ -18,6 +18,8 @@ committed scope — it's a backlog of ideas.
   startup (and stamps pre-Alembic databases).
 - ~~**Conditional GET.**~~ Per-feed ETag/Last-Modified are stored and sent as
   `If-None-Match`/`If-Modified-Since`; a 304 skips re-parsing.
+- ~~**Retention / cleanup.**~~ `rss-reader prune` (and an opt-in auto-prune via
+  `RSS_READER_RETENTION_DAYS`) drops old read items; `--all` includes unread.
 
 ## High-value, low-effort
 
@@ -26,11 +28,6 @@ committed scope — it's a backlog of ideas.
   show it beside the source in `ItemRow`.
 - **Feed-level filtering in the UI.** Click a feed in the sidebar to filter items to it
   (the API can already take a `feed_id`).
-
-## Robustness / correctness
-
-- **Retention / cleanup.** A `prune` command/job to drop read items older than N days,
-  since "keep everything" grows unbounded.
 
 ## Multi-user path
 
