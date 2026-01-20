@@ -20,6 +20,8 @@ committed scope — it's a backlog of ideas.
   `If-None-Match`/`If-Modified-Since`; a 304 skips re-parsing.
 - ~~**Retention / cleanup.**~~ `rss-reader prune` (and an opt-in auto-prune via
   `RSS_READER_RETENTION_DAYS`) drops old read items; `--all` includes unread.
+- ~~**Frontend tests.**~~ Vitest unit tests for the pure functions (`parseUtc`,
+  `groupByDay`), with a pinned timezone for determinism.
 
 ## High-value, low-effort
 
@@ -47,7 +49,6 @@ committed scope — it's a backlog of ideas.
 
 ## Quality / ops
 
-- **Frontend tests.** Unit-test the pure functions (`groupByDay`, `parseUtc`) with Vitest.
 - **CI.** GitHub Actions running `pytest` + `npm run check` + `npm run build` on push.
 - **Dockerfile.** Multi-stage build (npm build → copy `dist` → Python image) for the
   single-process `serve` deployment.
