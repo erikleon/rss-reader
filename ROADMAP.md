@@ -24,6 +24,8 @@ committed scope — it's a backlog of ideas.
   `groupByDay`), with a pinned timezone for determinism.
 - ~~**Structured logging.**~~ Refresh runs log per-feed new/error lines and a run
   summary (`refresh complete user=… feeds=… new=… errors=…`).
+- ~~**CI.**~~ GitHub Actions runs backend `pytest` and frontend
+  check/test/build on every push and PR.
 
 ## High-value, low-effort
 
@@ -51,6 +53,5 @@ committed scope — it's a backlog of ideas.
 
 ## Quality / ops
 
-- **CI.** GitHub Actions running `pytest` + `npm run check` + `npm run build` on push.
 - **Dockerfile.** Multi-stage build (npm build → copy `dist` → Python image) for the
   single-process `serve` deployment.
