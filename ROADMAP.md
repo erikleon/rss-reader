@@ -22,6 +22,8 @@ committed scope — it's a backlog of ideas.
   `RSS_READER_RETENTION_DAYS`) drops old read items; `--all` includes unread.
 - ~~**Frontend tests.**~~ Vitest unit tests for the pure functions (`parseUtc`,
   `groupByDay`), with a pinned timezone for determinism.
+- ~~**Structured logging.**~~ Refresh runs log per-feed new/error lines and a run
+  summary (`refresh complete user=… feeds=… new=… errors=…`).
 
 ## High-value, low-effort
 
@@ -52,4 +54,3 @@ committed scope — it's a backlog of ideas.
 - **CI.** GitHub Actions running `pytest` + `npm run check` + `npm run build` on push.
 - **Dockerfile.** Multi-stage build (npm build → copy `dist` → Python image) for the
   single-process `serve` deployment.
-- **Structured logging** for refresh runs (feeds fetched, new counts, errors).

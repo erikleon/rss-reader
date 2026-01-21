@@ -6,6 +6,7 @@ current user). Queries are scoped by ``user_id`` so adding auth later is additiv
 
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -16,6 +17,8 @@ from sqlmodel import Session, select
 from . import config, fetcher, opml
 from .fetcher import ParsedFeed
 from .models import Feed, Item, User
+
+log = logging.getLogger("rss_reader.service")
 
 
 class FeedError(Exception):
@@ -246,11 +249,22 @@ def refresh_all(
         ]
         fetched = [f.result() for f in futures]
 
-    results = [
-        _apply_fetch(session, feed, result, error)
-        for feed, (result, error) in zip(feeds, fetched)
-    ]
+    results: list[RefreshResult] = []
+    for feed, (result, error) in zip(feeds, fetched):
+        r = _apply_fetch(session, feed, result, error)
+        if r.error:
+            log.warning("feed refresh failed id=%s title=%r error=%r", r.feed_id, r.title, r.error)
+        elif r.new_count:
+            log.info("feed refreshed id=%s title=%r new=%d", r.feed_id, r.title, r.new_count)
+        results.append(r)
     session.commit()
+
+    total_new = sum(r.new_count for r in results)
+    errors = sum(1 for r in results if r.error)
+    log.info(
+        "refresh complete user=%s feeds=%d new=%d errors=%d",
+        user_id, len(results), total_new, errors,
+    )
     return results
 
 
