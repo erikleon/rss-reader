@@ -28,6 +28,7 @@ committed scope — it's a backlog of ideas.
   check/test/build on every push and PR.
 - ~~**Dockerfile.**~~ Multi-stage build (Node build → Python runtime) serving the API
   plus the built frontend from a single image; DB persisted on a `/data` volume.
+- ~~**Relative timestamps.**~~ Items show "3h ago" style times (absolute time on hover).
 
 ## High-value, low-effort
 
@@ -49,6 +50,5 @@ committed scope — it's a backlog of ideas.
 
 - **Keyboard navigation** (`j`/`k` move, `o` open, `m` toggle read).
 - **Unread counts** per feed in the sidebar and a total in the page title.
-- **Relative timestamps** ("3h ago") alongside the day grouping.
 - **Mark-read-on-scroll** as an option.
 - **Search** across stored titles/summaries via SQLite FTS5.

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatTime } from "../lib/datetime";
+  import { formatAbsolute, formatRelative } from "../lib/datetime";
   import { feedTitles, toggleRead } from "../lib/store";
   import type { Item } from "../lib/types";
 
@@ -35,7 +35,9 @@
     <div class="meta">
       <span class="source">{source}</span>
       <span class="dot">·</span>
-      <time>{formatTime(item.published_at)}</time>
+      <time title={formatAbsolute(item.published_at)}>
+        {formatRelative(item.published_at)}
+      </time>
     </div>
     {#if item.summary}
       <p class="summary">{item.summary}</p>
