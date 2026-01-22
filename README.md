@@ -60,8 +60,19 @@ rss-reader serve            # http://127.0.0.1:8000
 
 ```bash
 rss-reader serve --reload   # backend on :8000
-cd frontend && npm run dev  # frontend on :5173, proxies /api to :8000
+cd frontend && npm run dev  # frontend dev server, proxies /api to :8000
 ```
+
+### Docker
+
+A multi-stage build compiles the frontend and serves it together with the API:
+
+```bash
+docker build -t rss-reader .
+docker run -p 8000:8000 -v rss-reader-data:/data rss-reader
+```
+
+The database is persisted in the `/data` volume.
 
 ### CLI
 

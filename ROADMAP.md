@@ -26,6 +26,8 @@ committed scope — it's a backlog of ideas.
   summary (`refresh complete user=… feeds=… new=… errors=…`).
 - ~~**CI.**~~ GitHub Actions runs backend `pytest` and frontend
   check/test/build on every push and PR.
+- ~~**Dockerfile.**~~ Multi-stage build (Node build → Python runtime) serving the API
+  plus the built frontend from a single image; DB persisted on a `/data` volume.
 
 ## High-value, low-effort
 
@@ -50,8 +52,3 @@ committed scope — it's a backlog of ideas.
 - **Relative timestamps** ("3h ago") alongside the day grouping.
 - **Mark-read-on-scroll** as an option.
 - **Search** across stored titles/summaries via SQLite FTS5.
-
-## Quality / ops
-
-- **Dockerfile.** Multi-stage build (npm build → copy `dist` → Python image) for the
-  single-process `serve` deployment.
