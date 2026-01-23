@@ -13,11 +13,38 @@
     loadItems,
     loadingItems,
     markAllRead,
+    openSelected,
+    selectNext,
+    selectPrev,
+    toggleSelectedRead,
     unreadOnly,
   } from "./lib/store";
 
   onMount(async () => {
     await Promise.all([loadFeeds(), loadItems()]);
+  });
+
+  // Reader keyboard shortcuts, ignored while typing in a field.
+  function onKeydown(e: KeyboardEvent) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable))
+      return;
+    const handler: Record<string, () => void> = {
+      j: selectNext,
+      k: selectPrev,
+      o: openSelected,
+      m: toggleSelectedRead,
+    };
+    const fn = handler[e.key];
+    if (fn) {
+      e.preventDefault();
+      fn();
+    }
+  }
+  onMount(() => {
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
   });
 
   // The backend auto-refreshes feeds on its own schedule; poll periodically so
@@ -62,6 +89,7 @@
           Unread only
         </label>
         <button class="link" on:click={markAllRead}>Mark all read</button>
+        <span class="kbd-hint" title="j/k move · o open · m toggle read">⌨</span>
       </div>
     </header>
 
@@ -146,6 +174,11 @@
   }
   .link:hover {
     text-decoration: underline;
+  }
+  .kbd-hint {
+    color: var(--text-muted);
+    cursor: help;
+    font-size: 0.95rem;
   }
   .error {
     background: var(--danger-bg);

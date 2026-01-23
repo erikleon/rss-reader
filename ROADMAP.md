@@ -30,6 +30,8 @@ committed scope — it's a backlog of ideas.
   plus the built frontend from a single image; DB persisted on a `/data` volume.
 - ~~**Relative timestamps.**~~ Items show "3h ago" style times (absolute time on hover).
 - ~~**Unread counts.**~~ Per-feed unread badges in the sidebar and a total in the page title.
+- ~~**Keyboard navigation.**~~ `j`/`k` move the selection, `o` opens (and marks read),
+  `m` toggles read; the selected item scrolls into view.
 
 ## High-value, low-effort
 
@@ -49,6 +51,5 @@ committed scope — it's a backlog of ideas.
 
 ## UX polish
 
-- **Keyboard navigation** (`j`/`k` move, `o` open, `m` toggle read).
 - **Mark-read-on-scroll** as an option.
 - **Search** across stored titles/summaries via SQLite FTS5.

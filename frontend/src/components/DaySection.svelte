@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { selectedId } from "../lib/store";
   import type { DayGroup } from "../lib/types";
   import ItemRow from "./ItemRow.svelte";
 
@@ -8,7 +9,7 @@
 <section class="day">
   <h2 class="day-header">{group.label}</h2>
   {#each group.items as item (item.id)}
-    <ItemRow {item} />
+    <ItemRow {item} selected={item.id === $selectedId} />
   {/each}
 </section>
 

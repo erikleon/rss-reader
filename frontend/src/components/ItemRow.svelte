@@ -4,8 +4,11 @@
   import type { Item } from "../lib/types";
 
   export let item: Item;
+  export let selected = false;
 
+  let el: HTMLElement;
   $: source = $feedTitles.get(item.feed_id) ?? "";
+  $: if (selected && el) el.scrollIntoView({ block: "nearest" });
 
   function open() {
     // Opening the article marks it read (common reader behavior).
@@ -13,7 +16,7 @@
   }
 </script>
 
-<article class="item" class:read={item.read}>
+<article class="item" class:read={item.read} class:selected bind:this={el}>
   <button
     class="toggle"
     title={item.read ? "Mark unread" : "Mark read"}
@@ -54,6 +57,10 @@
   }
   .item.read {
     opacity: 0.55;
+  }
+  .item.selected {
+    box-shadow: inset 3px 0 0 var(--accent);
+    background: var(--surface-alt);
   }
   .toggle {
     border: none;

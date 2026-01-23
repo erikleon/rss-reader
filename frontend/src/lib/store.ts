@@ -120,6 +120,37 @@ export async function markAllRead() {
   }
 }
 
+// --- Keyboard navigation -------------------------------------------------- //
+export const selectedId = writable<number | null>(null);
+
+function selectBy(delta: number) {
+  const list = get(items);
+  if (!list.length) return;
+  const idx = list.findIndex((i) => i.id === get(selectedId));
+  const next = idx < 0 ? 0 : Math.min(Math.max(idx + delta, 0), list.length - 1);
+  selectedId.set(list[next].id);
+}
+
+export const selectNext = () => selectBy(1);
+export const selectPrev = () => selectBy(-1);
+
+function selectedItem(): Item | undefined {
+  const id = get(selectedId);
+  return get(items).find((i) => i.id === id);
+}
+
+export function openSelected() {
+  const item = selectedItem();
+  if (!item) return;
+  if (item.link) window.open(item.link, "_blank", "noopener");
+  if (!item.read) toggleRead(item);
+}
+
+export function toggleSelectedRead() {
+  const item = selectedItem();
+  if (item) toggleRead(item);
+}
+
 export const importStatus = writable<string | null>(null);
 
 export async function importOpml(xml: string) {
