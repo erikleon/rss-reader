@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from . import config, fetcher, opml
@@ -321,6 +322,21 @@ def set_read(
     session.commit()
     session.refresh(item)
     return item
+
+
+def unread_counts(
+    session: Session, user_id: int = config.DEFAULT_USER_ID
+) -> dict[int, int]:
+    """Number of unread items per feed (feeds with none are omitted)."""
+    feed_ids = [f.id for f in list_feeds(session, user_id)]
+    if not feed_ids:
+        return {}
+    rows = session.exec(
+        select(Item.feed_id, func.count())
+        .where(Item.feed_id.in_(feed_ids), Item.read == False)  # noqa: E712
+        .group_by(Item.feed_id)
+    )
+    return {feed_id: count for feed_id, count in rows}
 
 
 def mark_all_read(session: Session, user_id: int = config.DEFAULT_USER_ID) -> int:

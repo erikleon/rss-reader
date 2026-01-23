@@ -75,6 +75,16 @@ def test_set_read_and_unread(session, client, feed_url):
     assert len(service.list_items(session, days=None, unread_only=True)) == 3
 
 
+def test_unread_counts(session, client, feed_url):
+    feed = service.add_feed(session, feed_url, client=client)
+    assert service.unread_counts(session) == {feed.id: 3}
+    item = service.list_items(session, days=None)[0]
+    service.set_read(session, item.id, True)
+    assert service.unread_counts(session) == {feed.id: 2}
+    service.mark_all_read(session)
+    assert service.unread_counts(session) == {}  # no unread → feed omitted
+
+
 def test_mark_all_read(session, client, feed_url):
     service.add_feed(session, feed_url, client=client)
     changed = service.mark_all_read(session)

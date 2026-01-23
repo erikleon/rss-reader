@@ -14,6 +14,23 @@ export const refreshing = writable<boolean>(false);
 export const error = writable<string | null>(null);
 export const lastRefresh = writable<string | null>(null);
 
+/** Unread count per feed id, and the overall total (mirrored in the page title). */
+export const unreadByFeed = writable<Map<number, number>>(new Map());
+export const unreadTotal = writable<number>(0);
+
+export async function loadUnreadCounts() {
+  try {
+    const { total, by_feed } = await api.unread();
+    const map = new Map<number, number>();
+    for (const [id, n] of Object.entries(by_feed)) map.set(Number(id), n);
+    unreadByFeed.set(map);
+    unreadTotal.set(total);
+    document.title = total > 0 ? `(${total}) RSS Reader` : "RSS Reader";
+  } catch (e) {
+    report(e);
+  }
+}
+
 /** Items grouped into local-day buckets for rendering. */
 export const dayGroups = derived(items, ($items) => groupByDay($items));
 
@@ -40,6 +57,7 @@ export async function loadItems() {
   loadingItems.set(true);
   try {
     items.set(await api.listItems(get(days), get(unreadOnly)));
+    await loadUnreadCounts();
   } catch (e) {
     report(e);
   } finally {
@@ -87,6 +105,7 @@ export async function toggleRead(item: Item) {
     items.update(($items) =>
       $items.map((i) => (i.id === updated.id ? updated : i)),
     );
+    await loadUnreadCounts();
   } catch (e) {
     report(e);
   }

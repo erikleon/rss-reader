@@ -47,6 +47,9 @@ export const api = {
   markAllRead: () =>
     request<{ updated: number }>("/api/items/read-all", { method: "POST" }),
 
+  unread: () =>
+    request<{ total: number; by_feed: Record<string, number> }>("/api/unread"),
+
   importOpml: (xml: string) =>
     request<{ added: number; skipped: number; failed: { url: string; error: string }[] }>(
       "/api/import/opml",

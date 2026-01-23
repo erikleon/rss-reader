@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { feeds, removeFeed } from "../lib/store";
+  import { feeds, removeFeed, unreadByFeed } from "../lib/store";
 
   async function confirmRemove(id: number, title: string) {
     if (confirm(`Unsubscribe from “${title}”? Its items will be removed.`)) {
@@ -18,6 +18,9 @@
         <li>
           <div class="feed-row">
             <span class="feed-title" title={feed.url}>{feed.title}</span>
+            {#if $unreadByFeed.get(feed.id)}
+              <span class="badge">{$unreadByFeed.get(feed.id)}</span>
+            {/if}
             <button
               class="remove"
               title="Unsubscribe"
@@ -63,6 +66,18 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.92rem;
+  }
+  .badge {
+    flex-shrink: 0;
+    min-width: 1.25rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background: var(--surface-alt);
+    color: var(--text-soft);
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    text-align: center;
   }
   .remove {
     border: none;

@@ -125,6 +125,12 @@ def post_read_all(session: Session = Depends(get_session)) -> dict[str, int]:
     return {"updated": service.mark_all_read(session)}
 
 
+@app.get("/api/unread")
+def get_unread(session: Session = Depends(get_session)) -> dict[str, object]:
+    counts = service.unread_counts(session)
+    return {"total": sum(counts.values()), "by_feed": counts}
+
+
 # --------------------------------------------------------------------------- #
 # OPML import
 # --------------------------------------------------------------------------- #
