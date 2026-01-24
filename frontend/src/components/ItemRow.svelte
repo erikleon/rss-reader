@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { get } from "svelte/store";
   import { formatAbsolute, formatRelative } from "../lib/datetime";
-  import { feedTitles, toggleRead } from "../lib/store";
+  import { feedTitles, markRead, markReadOnScroll, toggleRead } from "../lib/store";
   import type { Item } from "../lib/types";
 
   export let item: Item;
@@ -9,6 +11,27 @@
   let el: HTMLElement;
   $: source = $feedTitles.get(item.feed_id) ?? "";
   $: if (selected && el) el.scrollIntoView({ block: "nearest" });
+
+  // When enabled, mark an item read once it scrolls above the viewport.
+  onMount(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (
+            !entry.isIntersecting &&
+            entry.boundingClientRect.top < 0 &&
+            get(markReadOnScroll) &&
+            !item.read
+          ) {
+            markRead(item);
+          }
+        }
+      },
+      { threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
 
   function open() {
     // Opening the article marks it read (common reader behavior).

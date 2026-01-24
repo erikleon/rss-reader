@@ -13,6 +13,7 @@
     loadItems,
     loadingItems,
     markAllRead,
+    markReadOnScroll,
     openSelected,
     selectNext,
     selectPrev,
@@ -87,6 +88,14 @@
             on:change={onToggleUnread}
           />
           Unread only
+        </label>
+        <label class="filter">
+          <input
+            type="checkbox"
+            checked={$markReadOnScroll}
+            on:change={() => markReadOnScroll.update((v) => !v)}
+          />
+          Mark read on scroll
         </label>
         <button class="link" on:click={markAllRead}>Mark all read</button>
         <span class="kbd-hint" title="j/k move · o open · m toggle read">⌨</span>

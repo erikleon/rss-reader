@@ -32,6 +32,8 @@ committed scope — it's a backlog of ideas.
 - ~~**Unread counts.**~~ Per-feed unread badges in the sidebar and a total in the page title.
 - ~~**Keyboard navigation.**~~ `j`/`k` move the selection, `o` opens (and marks read),
   `m` toggles read; the selected item scrolls into view.
+- ~~**Mark-read-on-scroll.**~~ Opt-in toggle (persisted) that marks items read once
+  they scroll above the viewport.
 
 ## High-value, low-effort
 
@@ -51,5 +53,4 @@ committed scope — it's a backlog of ideas.
 
 ## UX polish
 
-- **Mark-read-on-scroll** as an option.
 - **Search** across stored titles/summaries via SQLite FTS5.

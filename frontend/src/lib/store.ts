@@ -99,6 +99,40 @@ export async function refresh() {
   }
 }
 
+// --- Mark-read-on-scroll (persisted preference) --------------------------- //
+const MROS_KEY = "rss:markReadOnScroll";
+
+function initialMarkReadOnScroll(): boolean {
+  try {
+    return localStorage.getItem(MROS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export const markReadOnScroll = writable<boolean>(initialMarkReadOnScroll());
+markReadOnScroll.subscribe((v) => {
+  try {
+    localStorage.setItem(MROS_KEY, v ? "1" : "0");
+  } catch {
+    // no localStorage (e.g. tests); preference simply isn't persisted
+  }
+});
+
+/** Mark an item read (idempotent); used by the scroll observer. */
+export async function markRead(item: Item) {
+  if (item.read) return;
+  try {
+    const updated = await api.setRead(item.id, true);
+    items.update(($items) =>
+      $items.map((i) => (i.id === updated.id ? updated : i)),
+    );
+    await loadUnreadCounts();
+  } catch (e) {
+    report(e);
+  }
+}
+
 export async function toggleRead(item: Item) {
   try {
     const updated = await api.setRead(item.id, !item.read);
