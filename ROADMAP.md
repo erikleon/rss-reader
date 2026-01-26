@@ -34,6 +34,8 @@ committed scope — it's a backlog of ideas.
   `m` toggles read; the selected item scrolls into view.
 - ~~**Mark-read-on-scroll.**~~ Opt-in toggle (persisted) that marks items read once
   they scroll above the viewport.
+- ~~**Search.**~~ A search box filters items by a case-insensitive substring match on
+  title/summary (`ilike`); searching spans all history rather than the day window.
 
 ## High-value, low-effort
 
@@ -50,7 +52,3 @@ committed scope — it's a backlog of ideas.
   `DEFAULT_USER_ID` in `api.py`.
 - **Normalize shared feeds.** Global `feeds` + per-user `subscriptions` + per-user read
   state, so many users on the same feed fetch once. Larger refactor; only worth it at scale.
-
-## UX polish
-
-- **Search** across stored titles/summaries via SQLite FTS5.

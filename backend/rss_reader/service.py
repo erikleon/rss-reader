@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from . import config, fetcher, opml
@@ -287,8 +287,13 @@ def list_items(
     days: int | None = config.DEFAULT_DAYS,
     unread_only: bool = False,
     before: datetime | None = None,
+    query: str | None = None,
 ) -> list[Item]:
-    """Items for the user's feeds, newest first, within an optional day window."""
+    """Items for the user's feeds, newest first, within an optional day window.
+
+    When ``query`` is given, items are filtered to those whose title or summary
+    contain the term (case-insensitive substring match).
+    """
     feed_ids = [f.id for f in list_feeds(session, user_id)]
     if not feed_ids:
         return []
@@ -301,6 +306,11 @@ def list_items(
         stmt = stmt.where(Item.published_at < _to_naive_utc(before))
     if unread_only:
         stmt = stmt.where(Item.read == False)  # noqa: E712 - SQL boolean column
+    if query and query.strip():
+        pattern = f"%{query.strip()}%"
+        stmt = stmt.where(
+            or_(Item.title.ilike(pattern), Item.summary.ilike(pattern))
+        )
     stmt = stmt.order_by(Item.published_at.desc())
     return list(session.exec(stmt))
 

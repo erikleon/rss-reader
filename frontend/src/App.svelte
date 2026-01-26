@@ -15,11 +15,29 @@
     markAllRead,
     markReadOnScroll,
     openSelected,
+    searchQuery,
     selectNext,
     selectPrev,
     toggleSelectedRead,
     unreadOnly,
   } from "./lib/store";
+
+  // Debounced search input.
+  let searchText = "";
+  let searchTimer: ReturnType<typeof setTimeout>;
+  function onSearchInput() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      searchQuery.set(searchText.trim());
+      loadItems();
+    }, 250);
+  }
+  function clearSearch() {
+    clearTimeout(searchTimer);
+    searchText = "";
+    searchQuery.set("");
+    loadItems();
+  }
 
   onMount(async () => {
     await Promise.all([loadFeeds(), loadItems()]);
@@ -78,6 +96,18 @@
   </aside>
 
   <main class="content">
+    <div class="searchbar">
+      <input
+        type="search"
+        placeholder="Search items…"
+        bind:value={searchText}
+        on:input={onSearchInput}
+      />
+      {#if $searchQuery}
+        <button class="link" on:click={clearSearch}>Clear</button>
+      {/if}
+    </div>
+
     <header class="toolbar">
       <RefreshButton />
       <div class="toolbar-right">
@@ -110,15 +140,21 @@
       <p class="muted">Loading…</p>
     {:else if $dayGroups.length === 0}
       <p class="muted">
-        No items to show. Add a feed and hit Refresh to pull the latest.
+        {#if $searchQuery}
+          No items match “{$searchQuery}”.
+        {:else}
+          No items to show. Add a feed and hit Refresh to pull the latest.
+        {/if}
       </p>
     {:else}
       {#each $dayGroups as group (group.key)}
         <DaySection {group} />
       {/each}
-      <div class="load-older">
-        <button class="link" on:click={loadOlder}>Load older</button>
-      </div>
+      {#if !$searchQuery}
+        <div class="load-older">
+          <button class="link" on:click={loadOlder}>Load older</button>
+        </div>
+      {/if}
     {/if}
   </main>
 </div>
@@ -150,6 +186,26 @@
   .content {
     padding: 1.5rem 2rem 4rem;
     min-width: 0;
+  }
+  .searchbar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .searchbar input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font: inherit;
+    background: var(--surface);
+    color: var(--text);
+  }
+  .searchbar input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
   }
   .toolbar {
     display: flex;

@@ -103,10 +103,13 @@ def get_items(
     days: int = config.DEFAULT_DAYS,
     unread_only: bool = False,
     before: datetime | None = None,
+    q: str | None = None,
     session: Session = Depends(get_session),
 ) -> list[Item]:
+    # days <= 0 means "all history" (useful when searching).
+    window = days if days > 0 else None
     return service.list_items(
-        session, days=days, unread_only=unread_only, before=before
+        session, days=window, unread_only=unread_only, before=before, query=q
     )
 
 

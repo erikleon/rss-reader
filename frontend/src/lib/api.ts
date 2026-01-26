@@ -33,9 +33,10 @@ export const api = {
 
   refresh: () => request<RefreshResult[]>("/api/refresh", { method: "POST" }),
 
-  listItems: (days: number, unreadOnly: boolean) =>
+  listItems: (days: number, unreadOnly: boolean, q = "") =>
     request<Item[]>(
-      `/api/items?days=${days}&unread_only=${unreadOnly}`,
+      `/api/items?days=${days}&unread_only=${unreadOnly}` +
+        (q ? `&q=${encodeURIComponent(q)}` : ""),
     ),
 
   setRead: (id: number, read: boolean) =>

@@ -8,6 +8,7 @@ export const items = writable<Item[]>([]);
 
 export const days = writable<number>(30);
 export const unreadOnly = writable<boolean>(false);
+export const searchQuery = writable<string>("");
 
 export const loadingItems = writable<boolean>(false);
 export const refreshing = writable<boolean>(false);
@@ -56,7 +57,10 @@ export async function loadFeeds() {
 export async function loadItems() {
   loadingItems.set(true);
   try {
-    items.set(await api.listItems(get(days), get(unreadOnly)));
+    const q = get(searchQuery).trim();
+    // While searching, span all history rather than the day window.
+    const window = q ? 0 : get(days);
+    items.set(await api.listItems(window, get(unreadOnly), q));
     await loadUnreadCounts();
   } catch (e) {
     report(e);
