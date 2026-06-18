@@ -69,7 +69,9 @@ def init_db(engine=None) -> None:
 def session_scope(engine=None) -> Iterator[Session]:
     """Transactional session: commits on success, rolls back on error."""
     engine = engine or get_engine()
-    session = Session(engine)
+    # expire_on_commit=False so ORM objects stay usable after the session
+    # commits/closes — callers (CLI, etc.) read attributes after the `with` block.
+    session = Session(engine, expire_on_commit=False)
     try:
         yield session
         session.commit()
