@@ -92,9 +92,12 @@ model, generate a migration with `alembic revision --autogenerate -m "describe c
 
 ## Configuration
 
+Copy `.env.example` to `.env` and adjust as needed; all variables are optional.
+
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `RSS_READER_DB` | `~/.rss-reader/rss_reader.db` | SQLite database location |
+| `RSS_READER_PORT` | `8000` | Port the web app (`rss-reader serve`) listens on |
 | `RSS_READER_AUTO_REFRESH` | `1` | Background auto-refresh (`0` to disable) |
 | `RSS_READER_REFRESH_INTERVAL` | `900` | Auto-refresh interval, seconds |
 | `RSS_READER_CONCURRENCY` | `8` | Max feeds fetched in parallel per refresh |
