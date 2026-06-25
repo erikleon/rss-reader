@@ -207,7 +207,8 @@ def prune(
 @app.command()
 def serve(
     host: str = "127.0.0.1",
-    port: int = 8000,
+    # env var is a string, so allow passing via env var without needing to convert to int:
+    port: int = typer.Option(8000, "--port", envvar="RSS_READER_PORT", help="Port to serve on."),
     reload: bool = typer.Option(False, "--reload", help="Auto-reload on code changes."),
 ) -> None:
     """Run the web app (API + built frontend)."""

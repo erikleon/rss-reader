@@ -23,6 +23,7 @@ COPY --from=frontend /app/frontend/dist ./frontend/dist
 
 ENV RSS_READER_DB=/data/rss_reader.db
 VOLUME ["/data"]
-EXPOSE 8000
+# Port is configurable via the RSS_READER_PORT env var (read by the serve command).
+EXPOSE ${RSS_READER_PORT:-8000}
 
-CMD ["rss-reader", "serve", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["rss-reader", "serve", "--host", "0.0.0.0"]
