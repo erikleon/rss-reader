@@ -37,6 +37,26 @@ committed scope — it's a backlog of ideas.
 - ~~**Search.**~~ A search box filters items by a case-insensitive substring match on
   title/summary (`ilike`); searching spans all history rather than the day window.
 
+## Reader view (deferred, and not a small one)
+
+Open an article inside the reader, stripped to text, instead of handing it to
+the browser. The appeal is obvious. The reason it is not built yet is that it
+changes what this app does on a network:
+
+- **It fetches a URL the feed chose, not one a person typed.** `fetcher._get`
+  already refuses loopback, private and link-local addresses and caps redirects
+  and body size, so the guard exists. A reader view widens what it has to cover:
+  every article link in every feed, rather than the handful of feed URLs
+  somebody deliberately subscribed to.
+- **It renders returned HTML.** Today summaries are stripped to text at parse
+  time (`_clean_summary`), so nothing a feed sends is ever interpreted. A reader
+  view has to sanitise instead of strip, which is a different and much larger
+  problem. Allowlist the tags and attributes; do not filter for badness.
+- **It caches per person.** An article body belongs to whoever fetched it, and
+  the cache needs a retention story of its own or it will dwarf the item table.
+
+Worth doing. Worth doing on its own, with its own review.
+
 ## High-value, low-effort
 
 - **OPML export.** Generate an OPML document from `list_feeds` (import already shipped).
@@ -47,8 +67,12 @@ committed scope — it's a backlog of ideas.
 
 ## Multi-user path
 
-- **Auth.** The model is already `user_id`-scoped. Add `password_hash` to `User`,
-  session/JWT auth, and a `get_current_user` dependency replacing the hardcoded
-  `DEFAULT_USER_ID` in `api.py`.
+- ~~**Auth.**~~ Done, though not with passwords. Identity comes from the
+  `Tailscale-User-Login` header the ingress injects, checked against the
+  `RSS_READER_HOUSEHOLD` allowlist by `auth.get_current_user`. `User` has no
+  `password_hash` and is not meant to: the table records who exists, not who
+  proved it. The service layer's `user_id` default is gone, so a call site that
+  forgets whose data it wants is a `TypeError` rather than a silent read of
+  somebody else's.
 - **Normalize shared feeds.** Global `feeds` + per-user `subscriptions` + per-user read
   state, so many users on the same feed fetch once. Larger refactor; only worth it at scale.
