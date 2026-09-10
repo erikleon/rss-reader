@@ -1,0 +1,81 @@
+name: Publish
+
+# Tag-triggered, never on a push to main. The box pins images by digest, so a
+# publish should be a deliberate act that produces one reviewable artifact.
+#
+# No `latest` tag is pushed, on purpose: a pull then fetches exactly what was
+# reviewed and nothing that moved since. Take the digest from this run's summary
+# and put it in the homelab compose file by hand.
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/rss-reader
+
+jobs:
+  # The image is only worth publishing if the code in it passes. Running the
+  # tests here rather than trusting the CI run on main means a tag cut from an
+  # unmerged commit cannot publish a broken image.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Test
+        run: pytest -q
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The only write this workflow needs. The default token is broader.
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # mimir is an x86 desktop board. Building anything else would produce
+          # an image that pulls fine and then fails to start.
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test the published image
+        # Catches the class of failure a build cannot: the entrypoint is wrong,
+        # a dependency is missing from the runtime stage, the CLI does not start.
+        run: |
+          docker run --rm --entrypoint rss-reader \
+            ${{ env.IMAGE }}@${{ steps.build.outputs.digest }} --help
+
+      - name: Digest to pin
+        run: |
+          {
+            echo "### Pin this in homelab/stack/docker-compose.yml"
+            echo
+            echo '```'
+            echo "image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
+            echo '```'
+            echo
+            echo "Tag: \`${{ github.ref_name }}\`. The package is public, so the"
+            echo "box needs no registry login to pull it."
+          } >> "$GITHUB_STEP_SUMMARY"
