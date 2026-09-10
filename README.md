@@ -12,6 +12,8 @@ them in a clean view **grouped by day** with read/unread tracking. Usable as a *
 - **OPML import** (web UI, CLI, or API) to bring subscriptions over from another reader
 - Items grouped by day, newest first; title + source + time + snippet, link opens the original
 - Read/unread tracking, with an "unread only" filter and "mark all read"
+- **Reader view**: open an article inside the reader, stripped to the text, with
+  no navigation, no sidebars and no scripts
 - **Multi-user, with identity from the ingress.** Each person gets their own
   subscriptions and their own read state. There are no passwords: the app trusts
   the `Tailscale-User-Login` header that `tailscale serve` injects, checked
@@ -26,12 +28,37 @@ both surfaces:
 - `fetcher.py` — httpx fetch + feedparser normalization (no DB concerns; unit-tested offline)
 - `service.py` — core ops (`add_feed`, `refresh_all`, `list_items`, `set_read`, `group_by_day`, …)
 - `auth.py` — resolves a request's Tailscale login to a `User`
+- `extract.py` — finds the article on a fetched page and sanitises it
 - `api.py` — FastAPI JSON API under `/api` (also serves the built frontend)
 - `cli.py` — Typer CLI
 
 Every service function takes `user_id` and none of them default it. That is
 deliberate: with several people in one database, a defaulted argument turns a
 forgotten one into a silent read of somebody else's feeds instead of an error.
+
+## Reader view
+
+"Read here" on an item, or `r`, fetches the linked page and renders the article
+without the furniture. The result is cached per item, so only the first open is
+slow. Failures are cached too, because a page that cannot be read is a property
+of the page; "Re-fetch" is the way past that.
+
+Two separate things happen in `extract.py`, and the distinction matters:
+
+**Extraction** picks which part of the page is the article, by scoring where
+paragraphs cluster and then reassembling a body that is split across containers.
+It is a heuristic and it is allowed to be wrong. The original is one click away.
+
+**Sanitisation** decides what may reach the browser. It is an allowlist of tags
+and attributes, never a list of things to strip, so a tag nobody thought of is
+dropped rather than passed. Scripts, styles, iframes, forms and event handlers
+do not survive; relative links and images are resolved against the page they
+came from; every link opens away from the reader.
+
+Fetching an article uses the same guarded path as fetching a feed, so an
+article link pointing at loopback or a private address is refused. That guard
+matters more here than anywhere else in the app: a feed URL is one a person
+typed, and an article URL is one a stranger's feed chose.
 
 ## Identity
 

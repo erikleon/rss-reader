@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import sqlalchemy as sa
 from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
@@ -49,6 +50,42 @@ class Feed(SQLModel, table=True):
     # HTTP validators for conditional GET, so unchanged feeds return 304.
     etag: str | None = None
     last_modified: str | None = None
+
+
+class Article(SQLModel, table=True):
+    """The readable body of an item's linked page, once somebody has asked for it.
+
+    One row per item rather than per user, which is already per-user: items hang
+    off feeds and feeds carry a ``user_id``. Two people subscribed to the same
+    feed have their own item rows, so they fetch and store the article
+    separately. That is wasteful and it is the same duplication the item table
+    already has, so it waits for the same fix.
+
+    ``error`` is set instead of ``html`` when the fetch or the extraction failed.
+    The row still exists so a page that cannot be read is not re-fetched on every
+    open, and so the reason survives to be shown.
+    """
+
+    __tablename__ = "articles"
+
+    # Spelled out rather than with Field(foreign_key=...) so the cascade is part
+    # of the model and not only of migration 0004. Without it a database built
+    # by create_all has a plain foreign key, deleting an item fails outright
+    # instead of taking its article, and the schema the tests run against stops
+    # being the schema the box runs.
+    item_id: int = Field(
+        sa_column=sa.Column(
+            sa.Integer,
+            sa.ForeignKey("items.id", ondelete="CASCADE"),
+            primary_key=True,
+        )
+    )
+    url: str
+    title: str | None = None
+    html: str | None = None
+    word_count: int = 0
+    error: str | None = None
+    fetched_at: datetime = Field(default_factory=_utcnow)
 
 
 class Item(SQLModel, table=True):

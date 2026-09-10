@@ -33,6 +33,7 @@ ENDPOINTS = [
     ("GET", "/api/items", None),
     ("POST", "/api/items/1/read", {"read": True}),
     ("POST", "/api/items/read-all", None),
+    ("GET", "/api/items/1/article", None),
     ("GET", "/api/unread", None),
     ("GET", "/api/me", None),
     ("POST", "/api/import/opml", None),
@@ -165,6 +166,14 @@ def test_refresh_only_touches_the_callers_feeds(api, their_feed):
     response = api.post("/api/refresh", headers=_as(OWNER_LOGIN))
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_one_person_cannot_read_anothers_article(api, session, their_feed, other_id):
+    """The reader view fetches a page on demand, so an unscoped one would both
+    leak the article and spend the box's bandwidth on somebody else's link."""
+    item = service.list_items(session, other_id, days=None)[0]
+    response = api.get(f"/api/items/{item.id}/article", headers=_as(OWNER_LOGIN))
+    assert response.status_code == 404
 
 
 def test_a_first_time_household_member_starts_empty(api, their_feed, session):

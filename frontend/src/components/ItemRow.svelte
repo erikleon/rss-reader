@@ -2,7 +2,13 @@
   import { onMount } from "svelte";
   import { get } from "svelte/store";
   import { formatAbsolute, formatRelative } from "../lib/datetime";
-  import { feedTitles, markRead, markReadOnScroll, toggleRead } from "../lib/store";
+  import {
+    feedTitles,
+    markRead,
+    markReadOnScroll,
+    openReader,
+    toggleRead,
+  } from "../lib/store";
   import type { Item } from "../lib/types";
 
   export let item: Item;
@@ -59,6 +65,12 @@
       {/if}
     </h3>
     <div class="meta">
+      {#if item.link}
+        <!-- The reading pane. The title link still goes to the original, because
+             a reader view is an option rather than a replacement for the site. -->
+        <button class="reader-link" on:click={() => openReader(item)}>Read here</button>
+        <span class="dot">·</span>
+      {/if}
       <span class="source">{source}</span>
       <span class="dot">·</span>
       <time title={formatAbsolute(item.published_at)}>
@@ -72,6 +84,17 @@
 </article>
 
 <style>
+  .reader-link {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: var(--accent);
+    cursor: pointer;
+  }
+  .reader-link:hover {
+    text-decoration: underline;
+  }
   .item {
     display: flex;
     gap: 0.6rem;

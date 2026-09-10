@@ -1,4 +1,4 @@
-import type { Feed, Item, Me, RefreshResult } from "./types";
+import type { Article, Feed, Item, Me, RefreshResult } from "./types";
 
 /**
  * Sent on every request. The server rejects unsafe methods without it.
@@ -74,6 +74,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ read }),
     }),
+
+  article: (id: number, refresh = false) =>
+    request<Article>(`/api/items/${id}/article${refresh ? "?refresh=true" : ""}`),
 
   markAllRead: () =>
     request<{ updated: number }>("/api/items/read-all", { method: "POST" }),

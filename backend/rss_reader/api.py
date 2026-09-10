@@ -20,7 +20,7 @@ from sqlmodel import Session
 
 from . import auth, config, opml, scheduler, service
 from .db import get_session, init_db
-from .models import Feed, Item, User
+from .models import Article, Feed, Item, User
 
 # Path to the built Svelte frontend (frontend/dist), served when present.
 _FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
@@ -143,6 +143,29 @@ def post_item_read(
 ) -> Item:
     try:
         return service.set_read(session, item_id, body.read, user.id)
+    except service.FeedError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/items/{item_id}/article", response_model=Article)
+def get_item_article(
+    item_id: int,
+    refresh: bool = False,
+    user: User = CurrentUser,
+    session: Session = Depends(get_session),
+) -> Article:
+    """The item's linked page, stripped to the reading.
+
+    Slow on a first open, because it goes and fetches the page. Cached after
+    that, including the failures: a page that cannot be read stays unreadable
+    until `?refresh=true` says otherwise.
+
+    An unreadable page is a 200 carrying `error`, not an HTTP error. The
+    request succeeded; the page is the problem, and the frontend has something
+    to show either way.
+    """
+    try:
+        return service.get_article(session, item_id, user.id, refresh=refresh)
     except service.FeedError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

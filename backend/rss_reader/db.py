@@ -77,9 +77,25 @@ def _migrate(engine) -> None:
     inspector = inspect(engine)
     tables = inspector.get_table_names()
     if "feeds" in tables and "alembic_version" not in tables:
-        columns = {c["name"] for c in inspector.get_columns("feeds")}
-        command.stamp(cfg, "0002_feed_conditional_get" if "etag" in columns else "0001_baseline")
+        command.stamp(cfg, _revision_matching(inspector, tables))
     command.upgrade(cfg, "head")
+
+
+def _revision_matching(inspector, tables: list[str]) -> str:
+    """Which revision an un-stamped database already matches.
+
+    Newest evidence first. Stamping too early makes the next upgrade try to
+    create something that is already there; stamping at head, which this did
+    originally, skips migrations the database genuinely needs.
+    """
+    if "articles" in tables:
+        return "0004_article"
+    users = {c["name"]: c for c in inspector.get_columns("users")}
+    if not users.get("username", {}).get("nullable", True):
+        return "0003_user_login"
+    if "etag" in {c["name"] for c in inspector.get_columns("feeds")}:
+        return "0002_feed_conditional_get"
+    return "0001_baseline"
 
 
 def init_db(engine=None) -> None:

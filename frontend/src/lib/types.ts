@@ -27,6 +27,18 @@ export interface Me {
   login: string;
 }
 
+/** An item's linked page, stripped to the reading. */
+export interface Article {
+  item_id: number;
+  url: string;
+  title: string | null;
+  /** Sanitised fragment. Null when the page could not be read; see error. */
+  html: string | null;
+  word_count: number;
+  error: string | null;
+  fetched_at: string;
+}
+
 export interface RefreshResult {
   id: number;
   title: string;

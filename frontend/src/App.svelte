@@ -6,14 +6,18 @@
   import FeedSidebar from "./components/FeedSidebar.svelte";
   import RefreshButton from "./components/RefreshButton.svelte";
   import DaySection from "./components/DaySection.svelte";
+  import Reader from "./components/Reader.svelte";
   import {
     authError,
     dayGroups,
     days,
     error,
+    closeReader,
     loadFeeds,
     loadItems,
     loadMe,
+    openReaderForSelected,
+    readerItem,
     loadingItems,
     markAllRead,
     me,
@@ -57,11 +61,22 @@
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable))
       return;
+    // Escape closes the reader wherever focus happens to be, and nothing else
+    // is bound while it is open: j/k moving the list behind an article you are
+    // reading is disorienting rather than useful.
+    if (e.key === "Escape" && get(readerItem)) {
+      e.preventDefault();
+      closeReader();
+      return;
+    }
+    if (get(readerItem)) return;
+
     const handler: Record<string, () => void> = {
       j: selectNext,
       k: selectPrev,
       o: openSelected,
       m: toggleSelectedRead,
+      r: openReaderForSelected,
     };
     const fn = handler[e.key];
     if (fn) {
@@ -118,6 +133,8 @@
     {/if}
   </div>
 {:else}
+<Reader />
+
 <div class="layout">
   <aside class="sidebar">
     <h1 class="brand">RSS Reader</h1>
@@ -164,7 +181,7 @@
           Mark read on scroll
         </label>
         <button class="link" on:click={markAllRead}>Mark all read</button>
-        <span class="kbd-hint" title="j/k move · o open · m toggle read">⌨</span>
+        <span class="kbd-hint" title="j/k move · r read here · o open original · m toggle read">⌨</span>
       </div>
     </header>
 

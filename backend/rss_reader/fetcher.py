@@ -316,6 +316,24 @@ def fetch_conditional(
     )
 
 
+def fetch_page(url: str, *, client: httpx.Client | None = None) -> tuple[str, bytes]:
+    """Fetch an article page. Returns ``(final_url, body)``.
+
+    Same guarded path as a feed fetch, so the address checks, the redirect cap
+    and the size cap all apply. The extra rule here is the content type: a
+    reader view has no use for a PDF or an image, and fetching one means pulling
+    the whole thing through the size cap for nothing.
+
+    The final URL is returned rather than the requested one because relative
+    links in the page resolve against wherever it actually came from.
+    """
+    response = _get(url, client)
+    content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+    if content_type and content_type not in ("text/html", "application/xhtml+xml"):
+        raise BlockedUrlError(f"{url} is {content_type}, not a web page")
+    return str(response.url), response.content
+
+
 def fetch_feed_autodiscover(
     url: str, *, client: httpx.Client | None = None
 ) -> tuple[str, ParsedFeed]:

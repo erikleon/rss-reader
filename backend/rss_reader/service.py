@@ -18,9 +18,9 @@ import httpx
 from sqlalchemy import delete, func, or_, update
 from sqlmodel import Session, select
 
-from . import config, fetcher, opml
+from . import config, extract, fetcher, opml
 from .fetcher import ParsedFeed
-from .models import Feed, Item, User
+from .models import Article, Feed, Item, User
 
 log = logging.getLogger("rss_reader.service")
 
@@ -323,13 +323,23 @@ def list_items(
     return list(session.exec(stmt))
 
 
-def set_read(session: Session, item_id: int, read: bool, user_id: int) -> Item:
+def _get_item(session: Session, item_id: int, user_id: int) -> Item:
+    """An item belonging to ``user_id``, or FeedError.
+
+    Not found and not yours are the same answer on purpose: telling somebody an
+    id exists but is not theirs is a way to enumerate other people's items.
+    """
     item = session.get(Item, item_id)
     if item is None:
         raise FeedError(f"Item {item_id} not found")
     feed = session.get(Feed, item.feed_id)
     if feed is None or feed.user_id != user_id:
         raise FeedError(f"Item {item_id} not found")
+    return item
+
+
+def set_read(session: Session, item_id: int, read: bool, user_id: int) -> Item:
+    item = _get_item(session, item_id, user_id)
     item.read = read
     session.add(item)
     session.commit()
@@ -367,6 +377,64 @@ def mark_all_read(session: Session, user_id: int) -> int:
     )
     session.commit()
     return result.rowcount
+
+
+# --------------------------------------------------------------------------- #
+# Reader view
+# --------------------------------------------------------------------------- #
+def get_article(
+    session: Session,
+    item_id: int,
+    user_id: int,
+    *,
+    refresh: bool = False,
+    client: httpx.Client | None = None,
+) -> Article:
+    """The readable body of an item's linked page, fetching it on first ask.
+
+    Cached per item, and a failure is cached too: a page that cannot be read is
+    a property of the page, so re-fetching it every time somebody opens the item
+    would be a slow way to get the same answer. ``refresh`` is the way past that
+    once the page is fixed.
+
+    Errors are stored rather than raised, except for the two that are about the
+    request rather than the page: an item that is not yours, and an item with no
+    link to follow.
+    """
+    item = _get_item(session, item_id, user_id)
+    if not item.link:
+        raise FeedError(f"Item {item_id} has no link to open")
+
+    cached = session.get(Article, item_id)
+    if cached is not None and not refresh and cached.url == item.link:
+        return cached
+
+    article = cached or Article(item_id=item_id, url=item.link)
+    article.url = item.link
+    article.fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    try:
+        final_url, body = fetcher.fetch_page(item.link, client=client)
+        parsed = extract.extract(body, final_url)
+    except (fetcher.BlockedUrlError, extract.ExtractionError) as exc:
+        article.html, article.word_count, article.title = None, 0, None
+        article.error = str(exc)
+        log.info("article unreadable item=%s url=%r error=%r", item_id, item.link, str(exc))
+    except Exception as exc:  # noqa: BLE001 - a bad page must not 500 the reader
+        article.html, article.word_count, article.title = None, 0, None
+        article.error = f"Could not fetch the page: {exc}"
+        log.warning("article fetch failed item=%s url=%r error=%r", item_id, item.link, str(exc))
+    else:
+        article.html = parsed.html
+        article.title = parsed.title
+        article.word_count = parsed.word_count
+        article.error = None
+        log.info("article stored item=%s words=%d", item_id, parsed.word_count)
+
+    session.add(article)
+    session.commit()
+    session.refresh(article)
+    return article
 
 
 # --------------------------------------------------------------------------- #

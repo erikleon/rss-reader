@@ -1,7 +1,7 @@
 import { derived, get, writable } from "svelte/store";
 import { AuthError, api } from "./api";
 import { groupByDay } from "./groupByDay";
-import type { Feed, Item, Me } from "./types";
+import type { Article, Feed, Item, Me } from "./types";
 
 export const feeds = writable<Feed[]>([]);
 export const items = writable<Item[]>([]);
@@ -125,6 +125,39 @@ export async function refresh() {
   }
 }
 
+// --- Reader view ---------------------------------------------------------- //
+/** The item being read, or null when the reader is closed. */
+export const readerItem = writable<Item | null>(null);
+export const readerArticle = writable<Article | null>(null);
+export const readerLoading = writable<boolean>(false);
+
+/**
+ * Open the reading pane for an item.
+ *
+ * The first open goes and fetches the page, which is slow enough to need the
+ * loading state. Opening also marks the item read, matching what clicking the
+ * title already does: you opened it, you read it.
+ */
+export async function openReader(item: Item, refresh = false) {
+  readerItem.set(item);
+  readerArticle.set(null);
+  readerLoading.set(true);
+  markRead(item);
+  try {
+    readerArticle.set(await api.article(item.id, refresh));
+  } catch (e) {
+    report(e);
+    readerItem.set(null);
+  } finally {
+    readerLoading.set(false);
+  }
+}
+
+export function closeReader() {
+  readerItem.set(null);
+  readerArticle.set(null);
+}
+
 // --- Mark-read-on-scroll (persisted preference) --------------------------- //
 const MROS_KEY = "rss:markReadOnScroll";
 
@@ -204,6 +237,12 @@ export function openSelected() {
   if (!item) return;
   if (item.link) window.open(item.link, "_blank", "noopener");
   if (!item.read) toggleRead(item);
+}
+
+/** Open the reading pane for whatever j/k has selected. Bound to `r`. */
+export function openReaderForSelected() {
+  const item = selectedItem();
+  if (item?.link) openReader(item);
 }
 
 export function toggleSelectedRead() {
