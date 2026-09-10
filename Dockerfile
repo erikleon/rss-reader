@@ -26,4 +26,8 @@ VOLUME ["/data"]
 # Port is configurable via the RSS_READER_PORT env var (read by the serve command).
 EXPOSE ${RSS_READER_PORT:-8000}
 
-CMD ["rss-reader", "serve", "--host", "0.0.0.0"]
+# No --host. The bind address comes from RSS_READER_HOST, which defaults to
+# loopback, because identity arrives in a header that is only trustworthy while
+# the ingress is the sole route in. Set RSS_READER_HOST=0.0.0.0 deliberately if
+# the container is behind a published port rather than fronted on the host.
+CMD ["rss-reader", "serve"]
