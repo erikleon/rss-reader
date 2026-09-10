@@ -183,7 +183,11 @@ def parse_feed(content: bytes | str) -> ParsedFeed:
 
 
 def _read_capped(response: httpx.Response) -> bytes:
-    """Read a streamed body, refusing one larger than the configured ceiling."""
+    """Read a streamed body, refusing one larger than the configured ceiling.
+
+    The count is of decoded bytes, which is the number worth capping: a small
+    compressed body that expands to gigabytes is the case a cap exists for.
+    """
     chunks: list[bytes] = []
     total = 0
     for chunk in response.iter_bytes():
@@ -209,14 +213,30 @@ def _send_once(
         body = b"" if streamed.status_code == 304 else _read_capped(streamed)
     finally:
         streamed.close()
+
     # Rebuild as a normal response so callers keep using .content and .url.
-    response = httpx.Response(
+    #
+    # The encoding headers must not come with it. iter_bytes() hands back bytes
+    # httpx has already decompressed, so a Content-Encoding of gzip on the new
+    # response tells httpx to decompress them a second time, and the second
+    # attempt fails on the first byte: "Error -3 while decompressing data:
+    # incorrect header check". Content-Length is dropped for the same reason,
+    # since it describes the compressed body rather than this one.
+    #
+    # Most feeds gzip and some do not, so leaving these on breaks the majority
+    # of real sites while the offline tests, whose transport compresses
+    # nothing, stay green.
+    passthrough = httpx.Headers(streamed.headers)
+    for header in ("content-encoding", "content-length", "transfer-encoding"):
+        if header in passthrough:
+            del passthrough[header]
+
+    return httpx.Response(
         status_code=streamed.status_code,
-        headers=streamed.headers,
+        headers=passthrough,
         content=body,
         request=request,
     )
-    return response
 
 
 def _get(

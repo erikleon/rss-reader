@@ -10,10 +10,16 @@ offline and assert on the decision rather than on DNS.
 
 from __future__ import annotations
 
+import gzip
+import zlib
+from pathlib import Path
+
 import httpx
 import pytest
 
 from rss_reader import config, fetcher
+
+FIXTURE = Path(__file__).parent / "sample_feed.xml"
 
 
 def _resolver(*addresses):
@@ -130,3 +136,67 @@ def test_a_blocked_url_reads_as_a_feed_error_not_a_crash(session, user_id, monke
 
     with pytest.raises(service.FeedError):
         service.add_feed(session, "http://localhost:11434/api/tags", user_id)
+
+
+# --------------------------------------------------------------------------- #
+# Compressed responses
+# --------------------------------------------------------------------------- #
+# Most feeds gzip. The rest of the suite fetches through a MockTransport that
+# compresses nothing, so every one of these paths was unexercised, and the bug
+# they now cover took the reader out for every site that does compress while
+# the suite stayed green.
+def _compressed_client(monkeypatch, encoding: str, body: bytes) -> httpx.Client:
+    monkeypatch.setattr(config, "FETCH_GUARD", False)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            content=body,
+            headers={"content-encoding": encoding, "content-type": "application/rss+xml"},
+        )
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+@pytest.mark.parametrize(
+    "encoding,compress",
+    [
+        ("gzip", gzip.compress),
+        ("deflate", zlib.compress),
+    ],
+)
+def test_a_compressed_feed_is_decoded_exactly_once(monkeypatch, encoding, compress):
+    """The body must come back as the original bytes.
+
+    Rebuilding the response with the upstream Content-Encoding still on it made
+    httpx decompress an already-decompressed body, which fails as
+    "Error -3 while decompressing data: incorrect header check".
+    """
+    raw = FIXTURE.read_bytes()
+    client = _compressed_client(monkeypatch, encoding, compress(raw))
+
+    response = fetcher._get("https://example.com/feed.xml", client)
+
+    assert response.content == raw
+    assert "content-encoding" not in response.headers
+
+
+def test_a_compressed_feed_parses(monkeypatch):
+    """The whole point: a gzipped feed yields entries rather than an error."""
+    raw = FIXTURE.read_bytes()
+    client = _compressed_client(monkeypatch, "gzip", gzip.compress(raw))
+
+    _, parsed = fetcher.fetch_feed_autodiscover("https://example.com/feed.xml", client=client)
+
+    assert parsed.is_feed
+    assert len(parsed.entries) == 3
+
+
+def test_the_size_cap_counts_decoded_bytes(monkeypatch):
+    """A small compressed body that expands past the ceiling is still refused,
+    which is the case a cap is for."""
+    monkeypatch.setattr(config, "FETCH_MAX_BYTES", 1024)
+    client = _compressed_client(monkeypatch, "gzip", gzip.compress(b"x" * 200_000))
+
+    with pytest.raises(fetcher.BlockedUrlError, match="exceeds"):
+        fetcher._get("https://example.com/feed.xml", client)
