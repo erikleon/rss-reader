@@ -2,16 +2,26 @@
 
 Kept deliberately free of any database concern so it can be unit-tested against a
 local fixture with no network access (see ``parse_feed``).
+
+Every outbound request in this module goes through ``_get``, which is the only
+place a URL somebody else chose turns into a socket. Subscribing to a feed makes
+the server fetch that URL, so on a host running other services this is the
+difference between a feed reader and an internal port scanner. The guard resolves
+the hostname and refuses anything that lands on a loopback, private, link-local
+or otherwise reserved address, and it runs on every redirect hop rather than only
+on the URL that was typed.
 """
 
 from __future__ import annotations
 
+import ipaddress
 import re
+import socket
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import feedparser
 import httpx
@@ -49,6 +59,44 @@ class ParsedFeed:
 
 class FeedDiscoveryError(Exception):
     """Raised when a URL is not a feed and no feed link can be discovered."""
+
+
+class BlockedUrlError(Exception):
+    """Raised when a URL points somewhere this app must not fetch."""
+
+
+def _resolve(host: str, port: int) -> list[str]:
+    """Every address ``host`` resolves to. Separated out so tests can fake it."""
+    infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    return [info[4][0] for info in infos]
+
+
+def check_url_allowed(url: str, *, resolve=_resolve) -> None:
+    """Raise ``BlockedUrlError`` unless ``url`` is a public http(s) address.
+
+    The check is on the resolved addresses rather than on the hostname, because
+    a name is free to point anywhere and "localhost" is not the only way to
+    write 127.0.0.1.
+    """
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https"):
+        raise BlockedUrlError(f"Refusing to fetch a {parts.scheme or 'schemeless'} URL")
+    if not parts.hostname:
+        raise BlockedUrlError(f"No host in {url}")
+
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+    try:
+        addresses = resolve(parts.hostname, port)
+    except OSError as exc:
+        raise BlockedUrlError(f"Could not resolve {parts.hostname}: {exc}") from exc
+
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if not ip.is_global or ip.is_multicast:
+            raise BlockedUrlError(
+                f"Refusing to fetch {parts.hostname}: it resolves to {ip}, "
+                "which is on this network rather than the internet"
+            )
 
 
 class _FeedLinkParser(HTMLParser):
@@ -134,27 +182,76 @@ def parse_feed(content: bytes | str) -> ParsedFeed:
     )
 
 
+def _read_capped(response: httpx.Response) -> bytes:
+    """Read a streamed body, refusing one larger than the configured ceiling."""
+    chunks: list[bytes] = []
+    total = 0
+    for chunk in response.iter_bytes():
+        total += len(chunk)
+        if total > config.FETCH_MAX_BYTES:
+            response.close()
+            raise BlockedUrlError(
+                f"Response from {response.url} exceeds {config.FETCH_MAX_BYTES} bytes"
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _send_once(
+    client: httpx.Client, url: str, headers: dict[str, str]
+) -> httpx.Response:
+    """One request, no redirect following, body read under the size cap."""
+    if config.FETCH_GUARD:
+        check_url_allowed(url)
+    request = client.build_request("GET", url, headers=headers)
+    streamed = client.send(request, stream=True, follow_redirects=False)
+    try:
+        body = b"" if streamed.status_code == 304 else _read_capped(streamed)
+    finally:
+        streamed.close()
+    # Rebuild as a normal response so callers keep using .content and .url.
+    response = httpx.Response(
+        status_code=streamed.status_code,
+        headers=streamed.headers,
+        content=body,
+        request=request,
+    )
+    return response
+
+
 def _get(
     url: str,
     client: httpx.Client | None,
     extra_headers: dict[str, str] | None = None,
 ) -> httpx.Response:
+    """Fetch ``url``, following redirects by hand so every hop is checked.
+
+    httpx would follow them for us, but then only the first URL passes the
+    guard and a 302 to 127.0.0.1 goes straight through.
+    """
     headers = {"User-Agent": config.USER_AGENT}
     if extra_headers:
         headers.update(extra_headers)
-    if client is not None:
-        response = client.get(url, headers=headers, follow_redirects=True)
-    else:
-        response = httpx.get(
-            url,
-            headers=headers,
-            follow_redirects=True,
-            timeout=config.FETCH_TIMEOUT,
+
+    owned = client is None
+    client = client or httpx.Client(timeout=config.FETCH_TIMEOUT)
+    try:
+        current = url
+        for _ in range(config.FETCH_MAX_REDIRECTS + 1):
+            response = _send_once(client, current, headers)
+            location = response.headers.get("location")
+            if not response.is_redirect or not location:
+                # 304 (Not Modified) is a successful conditional response.
+                if response.status_code != 304:
+                    response.raise_for_status()
+                return response
+            current = str(httpx.URL(current).join(location))
+        raise BlockedUrlError(
+            f"More than {config.FETCH_MAX_REDIRECTS} redirects starting at {url}"
         )
-    # 304 (Not Modified) is a successful conditional response, not an error.
-    if response.status_code != 304:
-        response.raise_for_status()
-    return response
+    finally:
+        if owned:
+            client.close()
 
 
 def fetch_feed(url: str, *, client: httpx.Client | None = None) -> ParsedFeed:

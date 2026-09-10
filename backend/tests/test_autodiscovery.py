@@ -41,14 +41,14 @@ def test_fetch_autodiscover_raises_when_no_feed(client):
         fetcher.fetch_feed_autodiscover("https://nofeed.example/", client=client)
 
 
-def test_add_feed_via_homepage_stores_resolved_url(session, client):
-    feed = service.add_feed(session, "https://example.com/", client=client)
+def test_add_feed_via_homepage_stores_resolved_url(session, client, user_id):
+    feed = service.add_feed(session, "https://example.com/", user_id, client=client)
     assert feed.url == "https://example.com/feed.xml"
-    assert len(service.list_items(session, days=None)) == 3
+    assert len(service.list_items(session, user_id, days=None)) == 3
 
 
-def test_add_feed_rejects_duplicate_after_discovery(session, client):
-    service.add_feed(session, "https://example.com/feed.xml", client=client)
+def test_add_feed_rejects_duplicate_after_discovery(session, client, user_id):
+    service.add_feed(session, "https://example.com/feed.xml", user_id, client=client)
     # Adding the homepage should resolve to the same feed and be rejected.
     with pytest.raises(service.FeedError):
-        service.add_feed(session, "https://example.com/", client=client)
+        service.add_feed(session, "https://example.com/", user_id, client=client)

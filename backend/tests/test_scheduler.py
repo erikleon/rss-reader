@@ -8,15 +8,15 @@ from rss_reader import config, scheduler, service
 from rss_reader.models import Item
 
 
-def test_refresh_all_users_returns_per_user_results(session, client, feed_url):
-    service.add_feed(session, feed_url, client=client)
+def test_refresh_all_users_returns_per_user_results(session, client, feed_url, user_id):
+    service.add_feed(session, feed_url, user_id, client=client)
     results = service.refresh_all_users(session, client=client)
     assert config.DEFAULT_USER_ID in results
     assert results[config.DEFAULT_USER_ID][0].new_count == 0  # already up to date
 
 
-def test_run_refresh_cycle_refetches_missing_items(engine, session, client, feed_url):
-    service.add_feed(session, feed_url, client=client)
+def test_run_refresh_cycle_refetches_missing_items(engine, session, client, feed_url, user_id):
+    service.add_feed(session, feed_url, user_id, client=client)
     # Drop the items so the next cycle has something to re-add.
     for item in session.exec(select(Item)):
         session.delete(item)
@@ -24,4 +24,4 @@ def test_run_refresh_cycle_refetches_missing_items(engine, session, client, feed
 
     total = scheduler.run_refresh_cycle(engine, client=client)
     assert total == 3
-    assert len(service.list_items(session, days=None)) == 3
+    assert len(service.list_items(session, user_id, days=None)) == 3

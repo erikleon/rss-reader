@@ -20,19 +20,19 @@ def test_fetch_conditional_returns_304_when_etag_matches(client, feed_url):
     assert second.parsed is None
 
 
-def test_refresh_stores_validators(session, client, feed_url):
-    service.add_feed(session, feed_url, client=client)
-    service.refresh_all(session, client=client)
-    feed = service.list_feeds(session)[0]
+def test_refresh_stores_validators(session, client, feed_url, user_id):
+    service.add_feed(session, feed_url, user_id, client=client)
+    service.refresh_all(session, user_id, client=client)
+    feed = service.list_feeds(session, user_id)[0]
     assert feed.etag == '"feed-v1"'
     assert feed.last_modified == "Wed, 07 Jan 2026 00:00:00 GMT"
 
 
-def test_refresh_not_modified_keeps_items_and_succeeds(session, client, feed_url):
-    service.add_feed(session, feed_url, client=client)
-    service.refresh_all(session, client=client)  # stores the etag
+def test_refresh_not_modified_keeps_items_and_succeeds(session, client, feed_url, user_id):
+    service.add_feed(session, feed_url, user_id, client=client)
+    service.refresh_all(session, user_id, client=client)  # stores the etag
     # Second refresh sends the etag and gets a 304.
-    results = service.refresh_all(session, client=client)
+    results = service.refresh_all(session, user_id, client=client)
     assert results[0].error is None
     assert results[0].new_count == 0
-    assert len(service.list_items(session, days=None)) == 3
+    assert len(service.list_items(session, user_id, days=None)) == 3

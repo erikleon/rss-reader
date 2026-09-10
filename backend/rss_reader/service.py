@@ -1,7 +1,10 @@
 """Core operations shared by the web API and the CLI.
 
-Every function takes a ``Session`` and a ``user_id`` (defaulting to the single
-current user). Queries are scoped by ``user_id`` so adding auth later is additive.
+Every function takes a ``Session`` and a ``user_id``. The ``user_id`` has no
+default on purpose: it used to default to the single current user, and once
+several people share a database that default turns a forgotten argument into a
+silent cross-user read rather than an error. A caller that does not know whose
+data it wants should not compile.
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import func, or_
+from sqlalchemy import delete, func, or_, update
 from sqlmodel import Session, select
 
 from . import config, fetcher, opml
@@ -40,7 +43,7 @@ def _to_naive_utc(dt: datetime) -> datetime:
 # --------------------------------------------------------------------------- #
 # Feeds
 # --------------------------------------------------------------------------- #
-def list_feeds(session: Session, user_id: int = config.DEFAULT_USER_ID) -> list[Feed]:
+def list_feeds(session: Session, user_id: int) -> list[Feed]:
     stmt = select(Feed).where(Feed.user_id == user_id).order_by(Feed.title)
     return list(session.exec(stmt))
 
@@ -61,7 +64,7 @@ def _get_feed(session: Session, feed_id: int, user_id: int) -> Feed:
 def add_feed(
     session: Session,
     url: str,
-    user_id: int = config.DEFAULT_USER_ID,
+    user_id: int,
     *,
     client: httpx.Client | None = None,
 ) -> Feed:
@@ -78,7 +81,9 @@ def add_feed(
         resolved_url, parsed = fetcher.fetch_feed_autodiscover(url, client=client)
     except httpx.HTTPError as exc:
         raise FeedError(f"Could not fetch {url}: {exc}") from exc
-    except fetcher.FeedDiscoveryError as exc:
+    except (fetcher.FeedDiscoveryError, fetcher.BlockedUrlError) as exc:
+        # A blocked URL is a user-facing refusal, not a server fault: somebody
+        # pasted an address on this network. It must not surface as a 500.
         raise FeedError(str(exc)) from exc
 
     # Autodiscovery may have resolved to a different URL already subscribed to.
@@ -111,7 +116,7 @@ class ImportResult:
 def import_opml(
     session: Session,
     content: bytes | str,
-    user_id: int = config.DEFAULT_USER_ID,
+    user_id: int,
     *,
     client: httpx.Client | None = None,
 ) -> ImportResult:
@@ -128,13 +133,16 @@ def import_opml(
     return result
 
 
-def remove_feed(
-    session: Session, feed_id: int, user_id: int = config.DEFAULT_USER_ID
-) -> None:
-    feed = _get_feed(session, feed_id, user_id)
-    for item in session.exec(select(Item).where(Item.feed_id == feed_id)):
-        session.delete(item)
-    session.delete(feed)
+def remove_feed(session: Session, feed_id: int, user_id: int) -> None:
+    """Unsubscribe and delete the feed's items.
+
+    Items go first and both statements share one transaction, so a failure
+    part-way leaves the feed and its items together rather than leaving items
+    pointing at a feed that no longer exists.
+    """
+    _get_feed(session, feed_id, user_id)  # authorization: raises if not theirs
+    session.exec(delete(Item).where(Item.feed_id == feed_id))
+    session.exec(delete(Feed).where(Feed.id == feed_id))
     session.commit()
 
 
@@ -230,7 +238,7 @@ def refresh_feed(
 
 def refresh_all(
     session: Session,
-    user_id: int = config.DEFAULT_USER_ID,
+    user_id: int,
     *,
     client: httpx.Client | None = None,
 ) -> list[RefreshResult]:
@@ -282,7 +290,7 @@ def refresh_all_users(
 # --------------------------------------------------------------------------- #
 def list_items(
     session: Session,
-    user_id: int = config.DEFAULT_USER_ID,
+    user_id: int,
     *,
     days: int | None = config.DEFAULT_DAYS,
     unread_only: bool = False,
@@ -315,12 +323,7 @@ def list_items(
     return list(session.exec(stmt))
 
 
-def set_read(
-    session: Session,
-    item_id: int,
-    read: bool,
-    user_id: int = config.DEFAULT_USER_ID,
-) -> Item:
+def set_read(session: Session, item_id: int, read: bool, user_id: int) -> Item:
     item = session.get(Item, item_id)
     if item is None:
         raise FeedError(f"Item {item_id} not found")
@@ -334,9 +337,7 @@ def set_read(
     return item
 
 
-def unread_counts(
-    session: Session, user_id: int = config.DEFAULT_USER_ID
-) -> dict[int, int]:
+def unread_counts(session: Session, user_id: int) -> dict[int, int]:
     """Number of unread items per feed (feeds with none are omitted)."""
     feed_ids = [f.id for f in list_feeds(session, user_id)]
     if not feed_ids:
@@ -349,14 +350,23 @@ def unread_counts(
     return {feed_id: count for feed_id, count in rows}
 
 
-def mark_all_read(session: Session, user_id: int = config.DEFAULT_USER_ID) -> int:
-    """Mark every unread item read. Returns the number changed."""
-    items = list_items(session, user_id, days=None, unread_only=True)
-    for item in items:
-        item.read = True
-        session.add(item)
+def mark_all_read(session: Session, user_id: int) -> int:
+    """Mark every unread item read. Returns the number changed.
+
+    One statement rather than a row at a time: how far behind somebody is should
+    not decide how long this takes or how much of their backlog is loaded into
+    memory to do it.
+    """
+    feed_ids = [f.id for f in list_feeds(session, user_id)]
+    if not feed_ids:
+        return 0
+    result = session.exec(
+        update(Item)
+        .where(Item.feed_id.in_(feed_ids), Item.read == False)  # noqa: E712
+        .values(read=True)
+    )
     session.commit()
-    return len(items)
+    return result.rowcount
 
 
 # --------------------------------------------------------------------------- #
@@ -364,7 +374,7 @@ def mark_all_read(session: Session, user_id: int = config.DEFAULT_USER_ID) -> in
 # --------------------------------------------------------------------------- #
 def prune_items(
     session: Session,
-    user_id: int = config.DEFAULT_USER_ID,
+    user_id: int,
     *,
     days: int,
     include_unread: bool = False,
@@ -377,15 +387,13 @@ def prune_items(
         return 0
 
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
-    stmt = select(Item).where(Item.feed_id.in_(feed_ids), Item.published_at < cutoff)
+    stmt = delete(Item).where(Item.feed_id.in_(feed_ids), Item.published_at < cutoff)
     if not include_unread:
         stmt = stmt.where(Item.read == True)  # noqa: E712 - SQL boolean column
 
-    items = list(session.exec(stmt))
-    for item in items:
-        session.delete(item)
+    result = session.exec(stmt)
     session.commit()
-    return len(items)
+    return result.rowcount
 
 
 def prune_all_users(

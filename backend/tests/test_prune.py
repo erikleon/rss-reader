@@ -8,37 +8,37 @@ from rss_reader import service
 # relative to the test clock, so a 30-day window treats them as "old".
 
 
-def test_prune_deletes_old_read_items(session, client, feed_url):
-    service.add_feed(session, feed_url, client=client)
-    service.mark_all_read(session)
-    deleted = service.prune_items(session, days=30)
+def test_prune_deletes_old_read_items(session, client, feed_url, user_id):
+    service.add_feed(session, feed_url, user_id, client=client)
+    service.mark_all_read(session, user_id)
+    deleted = service.prune_items(session, user_id, days=30)
     assert deleted == 3
-    assert service.list_items(session, days=None) == []
+    assert service.list_items(session, user_id, days=None) == []
 
 
-def test_prune_keeps_unread_by_default(session, client, feed_url):
-    service.add_feed(session, feed_url, client=client)
-    deleted = service.prune_items(session, days=30)
+def test_prune_keeps_unread_by_default(session, client, feed_url, user_id):
+    service.add_feed(session, feed_url, user_id, client=client)
+    deleted = service.prune_items(session, user_id, days=30)
     assert deleted == 0
-    assert len(service.list_items(session, days=None)) == 3
+    assert len(service.list_items(session, user_id, days=None)) == 3
 
 
-def test_prune_all_includes_unread(session, client, feed_url):
-    service.add_feed(session, feed_url, client=client)
-    deleted = service.prune_items(session, days=30, include_unread=True)
+def test_prune_all_includes_unread(session, client, feed_url, user_id):
+    service.add_feed(session, feed_url, user_id, client=client)
+    deleted = service.prune_items(session, user_id, days=30, include_unread=True)
     assert deleted == 3
 
 
-def test_prune_respects_window(session, client, feed_url):
-    service.add_feed(session, feed_url, client=client)
-    service.mark_all_read(session)
+def test_prune_respects_window(session, client, feed_url, user_id):
+    service.add_feed(session, feed_url, user_id, client=client)
+    service.mark_all_read(session, user_id)
     # A century-wide window: nothing is older than the cutoff.
-    deleted = service.prune_items(session, days=36500)
+    deleted = service.prune_items(session, user_id, days=36500)
     assert deleted == 0
-    assert len(service.list_items(session, days=None)) == 3
+    assert len(service.list_items(session, user_id, days=None)) == 3
 
 
-def test_prune_disabled_when_days_zero(session, client, feed_url):
-    service.add_feed(session, feed_url, client=client)
-    service.mark_all_read(session)
-    assert service.prune_items(session, days=0) == 0
+def test_prune_disabled_when_days_zero(session, client, feed_url, user_id):
+    service.add_feed(session, feed_url, user_id, client=client)
+    service.mark_all_read(session, user_id)
+    assert service.prune_items(session, user_id, days=0) == 0

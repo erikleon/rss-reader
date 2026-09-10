@@ -1,20 +1,44 @@
-"""Engine, session handling, and schema/seed initialization."""
+"""Engine, session handling, and schema initialization."""
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from sqlalchemy import inspect
+from sqlalchemy import event, inspect
 from sqlmodel import Session, create_engine
 
 from . import config
-from .models import User
 
 _MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "migrations"
 
 _engine = None
+
+
+def _apply_pragmas(dbapi_connection, _record) -> None:
+    """Set the pragmas SQLite does not keep between connections.
+
+    All three are per-connection, so they belong on a connect event rather than
+    next to create_engine: a pool that opens a second connection would otherwise
+    get none of them.
+
+    WAL lets readers carry on through the background refresh's commit instead of
+    blocking on it. busy_timeout turns the residual writer collision into a wait
+    rather than an immediate error. foreign_keys is off by default in SQLite,
+    which means a feed can be deleted out from under its items with nothing to
+    stop it.
+    """
+    if not isinstance(dbapi_connection, sqlite3.Connection):
+        return
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute(f"PRAGMA busy_timeout={int(config.SQLITE_BUSY_TIMEOUT * 1000)}")
+        cursor.execute("PRAGMA foreign_keys=ON")
+    finally:
+        cursor.close()
 
 
 def get_engine():
@@ -25,6 +49,7 @@ def get_engine():
             config.database_url(),
             connect_args={"check_same_thread": False},
         )
+        event.listen(_engine, "connect", _apply_pragmas)
     return _engine
 
 
@@ -40,29 +65,33 @@ def _alembic_config(engine):
 def _migrate(engine) -> None:
     """Bring the schema to head via Alembic.
 
-    A database created before Alembic was adopted already has the tables but no
-    ``alembic_version``; stamp it at head rather than re-creating, then future
-    migrations apply normally.
+    A database created before Alembic was adopted has the tables but no
+    ``alembic_version``. Stamp it at the revision matching the columns it
+    actually has, then upgrade. Stamping straight at head, which is what this
+    did before, would skip 0003 and leave ``users.username`` nullable on exactly
+    the databases that need it changed.
     """
     from alembic import command
 
     cfg = _alembic_config(engine)
-    tables = inspect(engine).get_table_names()
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
     if "feeds" in tables and "alembic_version" not in tables:
-        command.stamp(cfg, "head")
-    else:
-        command.upgrade(cfg, "head")
+        columns = {c["name"] for c in inspector.get_columns("feeds")}
+        command.stamp(cfg, "0002_feed_conditional_get" if "etag" in columns else "0001_baseline")
+    command.upgrade(cfg, "head")
 
 
 def init_db(engine=None) -> None:
-    """Apply migrations and ensure the default user exists."""
+    """Apply migrations. Users are created when a login first arrives."""
     engine = engine or get_engine()
     _migrate(engine)
-    with Session(engine) as session:
-        existing = session.get(User, config.DEFAULT_USER_ID)
-        if existing is None:
-            session.add(User(id=config.DEFAULT_USER_ID, username="default"))
-            session.commit()
+
+
+def get_session() -> Iterator[Session]:
+    """FastAPI dependency yielding a request-scoped session."""
+    with Session(get_engine()) as session:
+        yield session
 
 
 @contextmanager

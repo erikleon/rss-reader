@@ -1,9 +1,12 @@
 """Database models.
 
-Multi-user readiness: every ``Feed`` carries a ``user_id`` and ``Item`` rows hang
-off a feed, so per-item read state is a plain boolean (it is naturally scoped to a
-user because the feed is). Adding auth later means resolving a real user id instead
-of the default one — no schema change to read state.
+Every ``Feed`` carries a ``user_id`` and ``Item`` rows hang off a feed, so
+per-item read state is a plain boolean: it is scoped to a user because the feed
+is. That is what let auth be added without touching read state.
+
+``User.username`` holds the Tailscale login the person arrives with, normalized
+to lower case. It is the join between an incoming request and the rows below it,
+so it is unique and not null.
 """
 
 from __future__ import annotations
@@ -23,9 +26,10 @@ class User(SQLModel, table=True):
     __tablename__ = "users"
 
     id: int | None = Field(default=None, primary_key=True)
-    username: str | None = Field(default=None, unique=True)
+    # The Tailscale login, lower-cased. There is no password_hash and there is
+    # not meant to be: identity comes from the ingress, not from this table.
+    username: str = Field(unique=True)
     created_at: datetime = Field(default_factory=_utcnow)
-    # Auth fields (password_hash, etc.) are intentionally deferred.
 
 
 class Feed(SQLModel, table=True):
@@ -33,7 +37,9 @@ class Feed(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("user_id", "url", name="uq_feed_user_url"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(default=1, foreign_key="users.id", index=True)
+    # No default. A feed without an owner is not a thing that should be
+    # constructible, for the same reason service functions lost theirs.
+    user_id: int = Field(foreign_key="users.id", index=True)
     url: str
     title: str
     site_url: str | None = None

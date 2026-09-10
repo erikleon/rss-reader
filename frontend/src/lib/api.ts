@@ -1,9 +1,34 @@
-import type { Feed, Item, RefreshResult } from "./types";
+import type { Feed, Item, Me, RefreshResult } from "./types";
+
+/**
+ * Sent on every request. The server rejects unsafe methods without it.
+ *
+ * Identity here comes from a Tailscale header the ingress adds, so the server
+ * cannot tell a request this app made from one another site told the browser to
+ * make. A cross-site form cannot set a custom header at all, and a cross-site
+ * fetch that tries one has to pass a preflight the server does not answer.
+ */
+const CSRF_HEADER = "X-RSS-Reader";
+
+/** Thrown when the server refuses the request's identity rather than its content. */
+export class AuthError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AuthError";
+  }
+}
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers: {
+      "Content-Type": "application/json",
+      [CSRF_HEADER]: "1",
+      ...options?.headers,
+    },
   });
   if (!res.ok) {
     let detail = res.statusText;
@@ -13,6 +38,9 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
     } catch {
       // non-JSON error body; keep statusText
     }
+    if (res.status === 401 || res.status === 403) {
+      throw new AuthError(res.status, detail);
+    }
     throw new Error(detail);
   }
   if (res.status === 204) return undefined as T;
@@ -20,6 +48,8 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  me: () => request<Me>("/api/me"),
+
   listFeeds: () => request<Feed[]>("/api/feeds"),
 
   addFeed: (url: string) =>

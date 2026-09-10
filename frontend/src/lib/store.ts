@@ -1,7 +1,7 @@
 import { derived, get, writable } from "svelte/store";
-import { api } from "./api";
+import { AuthError, api } from "./api";
 import { groupByDay } from "./groupByDay";
-import type { Feed, Item } from "./types";
+import type { Feed, Item, Me } from "./types";
 
 export const feeds = writable<Feed[]>([]);
 export const items = writable<Item[]>([]);
@@ -13,6 +13,16 @@ export const searchQuery = writable<string>("");
 export const loadingItems = writable<boolean>(false);
 export const refreshing = writable<boolean>(false);
 export const error = writable<string | null>(null);
+/**
+ * Set when the server refuses who we are, rather than what we asked for.
+ *
+ * Kept apart from `error` because the whole page is wrong in this case, not one
+ * action. Showing an empty feed list with a red line above it would read as
+ * "you have no feeds" and send somebody looking in the wrong place.
+ */
+export const authError = writable<{ status: number; message: string } | null>(null);
+/** The login the server resolved this browser to. */
+export const me = writable<Me | null>(null);
 export const lastRefresh = writable<string | null>(null);
 
 /** Unread count per feed id, and the overall total (mirrored in the page title). */
@@ -43,7 +53,19 @@ export const feedTitles = derived(feeds, ($feeds) => {
 });
 
 function report(e: unknown) {
+  if (e instanceof AuthError) {
+    authError.set({ status: e.status, message: e.message });
+    return;
+  }
   error.set(e instanceof Error ? e.message : String(e));
+}
+
+export async function loadMe() {
+  try {
+    me.set(await api.me());
+  } catch (e) {
+    report(e);
+  }
 }
 
 export async function loadFeeds() {

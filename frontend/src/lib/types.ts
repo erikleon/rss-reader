@@ -21,6 +21,12 @@ export interface Item {
   read: boolean;
 }
 
+/** Who the server resolved this browser to, from the ingress identity header. */
+export interface Me {
+  id: number;
+  login: string;
+}
+
 export interface RefreshResult {
   id: number;
   title: string;

@@ -48,17 +48,17 @@ def test_parse_opml_rejects_invalid_xml():
         opml.parse_opml("not xml <<<")
 
 
-def test_import_opml_subscribes_and_isolates_failures(session, client):
-    result = service.import_opml(session, OPML, client=client)
+def test_import_opml_subscribes_and_isolates_failures(session, client, user_id):
+    result = service.import_opml(session, OPML, user_id, client=client)
     assert len(result.added) == 2
     assert len(result.failed) == 1
     assert result.failed[0][0] == "https://nope.invalid/feed"
-    assert len(service.list_feeds(session)) == 2
+    assert len(service.list_feeds(session, user_id)) == 2
 
 
-def test_import_opml_skips_already_subscribed(session, client):
-    service.add_feed(session, "https://example.com/feed.xml", client=client)
-    result = service.import_opml(session, OPML, client=client)
+def test_import_opml_skips_already_subscribed(session, client, user_id):
+    service.add_feed(session, "https://example.com/feed.xml", user_id, client=client)
+    result = service.import_opml(session, OPML, user_id, client=client)
     assert "https://example.com/feed.xml" in result.skipped
     assert len(result.added) == 1  # only the other example feed
     assert len(result.failed) == 1

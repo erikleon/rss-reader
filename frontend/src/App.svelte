@@ -1,18 +1,22 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
+  import { get } from "svelte/store";
   import AddFeed from "./components/AddFeed.svelte";
   import ImportOpml from "./components/ImportOpml.svelte";
   import FeedSidebar from "./components/FeedSidebar.svelte";
   import RefreshButton from "./components/RefreshButton.svelte";
   import DaySection from "./components/DaySection.svelte";
   import {
+    authError,
     dayGroups,
     days,
     error,
     loadFeeds,
     loadItems,
+    loadMe,
     loadingItems,
     markAllRead,
+    me,
     markReadOnScroll,
     openSelected,
     searchQuery,
@@ -40,6 +44,10 @@
   }
 
   onMount(async () => {
+    // Identity first: if the server refuses it, the other two calls would only
+    // produce the same refusal twice over.
+    await loadMe();
+    if (get(authError)) return;
     await Promise.all([loadFeeds(), loadItems()]);
   });
 
@@ -87,9 +95,37 @@
   }
 </script>
 
+{#if $authError}
+  <!--
+    The whole page is wrong, not one action, so this replaces the reader rather
+    than sitting above an empty feed list that would read as "you have no feeds".
+    401 and 403 mean different things and get different sentences: one is "you
+    did not come in through the front door", the other is "you did, and you are
+    not on the list".
+  -->
+  <div class="gate">
+    <h1>rss-reader</h1>
+    {#if $authError.status === 401}
+      <p>
+        This reader identifies you from your Tailscale login, and this request
+        arrived without one. Open it at its tailnet address rather than directly.
+      </p>
+    {:else}
+      <p>{$authError.message}</p>
+      <p class="muted">
+        Ask whoever runs this box to add your login to RSS_READER_HOUSEHOLD.
+      </p>
+    {/if}
+  </div>
+{:else}
 <div class="layout">
   <aside class="sidebar">
     <h1 class="brand">RSS Reader</h1>
+    <!-- Whose reader this is. Under header identity the browser sends no name,
+         so without this "these are not my feeds" has no visible explanation. -->
+    {#if $me}
+      <p class="whoami" title="Resolved from your Tailscale login">{$me.login}</p>
+    {/if}
     <AddFeed />
     <FeedSidebar />
     <ImportOpml />
@@ -158,8 +194,18 @@
     {/if}
   </main>
 </div>
+{/if}
 
 <style>
+  .gate {
+    max-width: 34rem;
+    margin: 12vh auto;
+    padding: 0 1.5rem;
+  }
+  .gate p {
+    line-height: 1.5;
+  }
+
   .layout {
     display: grid;
     grid-template-columns: 260px 1fr;
@@ -178,7 +224,13 @@
   }
   .brand {
     font-size: 1.1rem;
+    margin: 0 0 0.25rem;
+  }
+  .whoami {
     margin: 0 0 1rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
   }
   .sidebar :global(.add-feed) {
     margin-bottom: 1.5rem;
