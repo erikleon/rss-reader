@@ -4,6 +4,8 @@ version = "0.3.0"
 description = "A simple personal RSS reader with a web UI and CLI."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
@@ -23,7 +25,7 @@ dev = [
 rss-reader = "rss_reader.cli:app"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
