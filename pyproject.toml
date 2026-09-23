@@ -4,6 +4,7 @@ version = "0.3.0"
 description = "A simple personal RSS reader with a web UI and CLI."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",

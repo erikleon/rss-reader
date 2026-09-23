@@ -183,3 +183,7 @@ Copy `.env.example` to `.env` and adjust as needed; all variables are optional.
 pytest          # backend, offline (uses a local feed fixture)
 cd frontend && npm run check   # Svelte/TS type check
 ```
+
+## License
+
+[MIT](LICENSE)
